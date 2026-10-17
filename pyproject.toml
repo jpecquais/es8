@@ -1,0 +1,30 @@
+[project]
+name = "es8ctl"
+version = "0.1.0"
+description = "Open-source editor for the Boss ES-8 effects switching system"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "AGPL-3.0-or-later"
+dependencies = [
+    "typer>=0.12",
+    "mido>=1.3",
+    "python-rtmidi>=1.5",
+]
+
+[project.scripts]
+es8ctl = "es8ctl.cli:app"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/es8ctl"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+
+# Données personnelles : backups de l'utilisateur, jamais committés
+backups/
+*.bel
