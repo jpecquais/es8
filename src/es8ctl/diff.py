@@ -49,6 +49,20 @@ def _bit_runs(a: bytes, b: bytes) -> list[dict]:
     ]
 
 
+def _label_ranges(indices: list[int]) -> list[str]:
+    """Plages de patchs lisibles : [0, 1, 2, 5] → ["1-1..1-3", "1-6"]."""
+    ranges: list[list[int]] = []
+    for index in sorted(indices):
+        if ranges and index == ranges[-1][1] + 1:
+            ranges[-1][1] = index
+        else:
+            ranges.append([index, index])
+    return [
+        patch_label(lo) if lo == hi else f"{patch_label(lo)}..{patch_label(hi)}"
+        for lo, hi in ranges
+    ]
+
+
 def _system_diff(a: bytes | None, b: bytes | None) -> dict:
     if a is None or b is None:
         return {"compared": False, "present": {"a": a is not None, "b": b is not None}}
@@ -82,9 +96,12 @@ def diff_dumps(a: BulkDump, b: BulkDump) -> dict:
         "changed_patch_count": len(patches),
         "patches": patches,
         "coverage": {
-            "only_in_a": sorted(a.patches.keys() - b.patches.keys()),
-            "only_in_b": sorted(b.patches.keys() - a.patches.keys()),
-            "incomplete": {"a": a.incomplete, "b": b.incomplete},
+            "only_in_a": _label_ranges(list(a.patches.keys() - b.patches.keys())),
+            "only_in_b": _label_ranges(list(b.patches.keys() - a.patches.keys())),
+            "incomplete": {
+                "a": _label_ranges(a.incomplete),
+                "b": _label_ranges(b.incomplete),
+            },
         },
     }
 

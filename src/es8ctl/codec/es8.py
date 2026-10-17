@@ -247,3 +247,14 @@ def patch_label(index: int) -> str:
     """Numéro de patch tel qu'affiché par l'ES-8 : banque-numéro (1-1 … 100-8)."""
     bank, number = divmod(index, PATCHES_PER_BANK)
     return f"{bank + 1}-{number + 1}"
+
+
+def parse_patch_label(label: str) -> int:
+    """Inverse de patch_label : « 12-3 » → index 0-799. Lève CodecError si invalide."""
+    try:
+        bank, number = (int(part) for part in label.split("-"))
+    except ValueError:
+        raise CodecError(f"Numéro de patch invalide : {label!r} (attendu banque-numéro, ex. 1-1).") from None
+    if not (1 <= bank <= PATCH_COUNT // PATCHES_PER_BANK and 1 <= number <= PATCHES_PER_BANK):
+        raise CodecError(f"Patch hors plage : {label!r} (1-1 … 100-8).")
+    return (bank - 1) * PATCHES_PER_BANK + number - 1

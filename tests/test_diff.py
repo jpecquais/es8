@@ -113,6 +113,12 @@ def test_diff_rename_touches_only_name_bits():
         assert PATCH_NAME_BIT <= run["bit"] and run["bit"] + run["width"] <= name_end
 
 
+def test_diff_reports_coverage_as_label_ranges():
+    result = diff_files(NAME_A, SESSION1)
+    assert result["coverage"]["incomplete"] == {"a": ["100-8"], "b": ["100-8"]}
+    assert result["coverage"]["only_in_a"] == []
+
+
 def test_inspect_reports_no_errors_on_fixtures():
     for path in (SESSION1, NAME_A):
         result = inspect_file(path)

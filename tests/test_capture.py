@@ -9,7 +9,7 @@ import json
 import mido
 
 from es8ctl.capture import record
-from es8ctl.codec import build_frame
+from es8ctl.codec import BULK_DATA_LEN, BULK_LAST_COUNTER, build_es8_bulk_frame, build_frame
 
 # Trames valides pour une adresse de 4 octets (défaut de record()).
 GOOD = build_frame(0x10, 0x42, 0x12, (0x40, 0x00, 0x00, 0x7F), [0x00])
@@ -101,3 +101,33 @@ def test_frames_flushed_incrementally(tmp_path, monkeypatch):
     syx_files = list(tmp_path.glob("*.syx"))
     assert len(syx_files) == 1
     assert GOOD in syx_files[0].read_bytes()
+
+
+def _bulk(counter):
+    return FakeMsg("sysex", build_es8_bulk_frame(counter, bytes(BULK_DATA_LEN))[1:-1])
+
+
+def test_auto_stop_on_last_bulk_frame(tmp_path, monkeypatch):
+    """La capture se termine seule à la dernière trame du dump : la trame
+    suivante du script (qui ferait échouer le test) n'est jamais lue."""
+    script = [_bulk(BULK_LAST_COUNTER - 1), _bulk(BULK_LAST_COUNTER), RuntimeError("lu trop loin")]
+    monkeypatch.setattr(mido, "open_input", lambda port: FakeInput(script))
+    progress = []
+
+    result = record("fake", tmp_path, on_frame=lambda n, c: progress.append((n, c)))
+
+    assert result.frame_count == 2
+    assert progress == [(1, BULK_LAST_COUNTER - 1), (2, BULK_LAST_COUNTER)]
+
+
+def test_no_auto_stop_keeps_listening(tmp_path, monkeypatch):
+    script = [_bulk(BULK_LAST_COUNTER), FakeMsg("sysex", GOOD[1:-1]), KeyboardInterrupt()]
+    monkeypatch.setattr(mido, "open_input", lambda port: FakeInput(script))
+    progress = []
+
+    result = record(
+        "fake", tmp_path, auto_stop=False, on_frame=lambda n, c: progress.append((n, c))
+    )
+
+    assert result.frame_count == 2
+    assert progress == [(1, BULK_LAST_COUNTER), (2, None)]

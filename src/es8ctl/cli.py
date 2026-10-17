@@ -1,4 +1,4 @@
-"""CLI es8ctl : devices · capture · inspect · diff.
+"""CLI es8ctl : devices · capture · inspect · diff · patches.
 
 Sortie JSON machine-first par défaut. Read-only : aucune de ces commandes
 n'émet quoi que ce soit vers l'ES-8.
@@ -12,8 +12,9 @@ from pathlib import Path
 import typer
 
 from .capture import CaptureResult, inspect_file, list_ports, record
-from .codec import CodecError
-from .diff import diff_files
+from .codec import BULK_LAST_COUNTER, CodecError, parse_patch_label, patch_label, unpack_7to8
+from .diff import diff_files, load_dump
+from .patch import PATCH_FIELDS, SCHEMA_VERSION, decode_patch
 
 app = typer.Typer(
     add_completion=False,
@@ -35,6 +36,11 @@ def _dump_result(result: CaptureResult) -> dict:
     }
 
 
+def _progress(received: int, counter: int | None) -> None:
+    where = f"compteur {counter}/{BULK_LAST_COUNTER}" if counter is not None else "trame non ES-8"
+    typer.echo(f"\r{received} trame(s) reçue(s) · {where}   ", err=True, nl=False)
+
+
 @app.command()
 def devices() -> None:
     """Liste les ports d'entrée MIDI disponibles."""
@@ -50,8 +56,16 @@ def capture(
     timeout: float = typer.Option(
         None, "--timeout", "-t", help="Durée de capture en secondes (sinon Ctrl-C)."
     ),
+    auto_stop: bool = typer.Option(
+        True,
+        "--auto-stop/--no-auto-stop",
+        help=f"S'arrêter à la dernière trame du bulk dump (compteur {BULK_LAST_COUNTER}).",
+    ),
 ) -> None:
-    """Enregistre les trames SysEx reçues. Déclencher le bulk dump au panneau de l'ES-8."""
+    """Enregistre les trames SysEx reçues. Lancer AVANT de déclencher le bulk dump au panneau.
+
+    La progression s'affiche sur stderr ; le résultat JSON sur stdout.
+    """
     ports = list_ports()
     if port is None:
         if not ports:
@@ -68,7 +82,11 @@ def capture(
         raise typer.Exit(code=1)
 
     try:
-        result = record(port, Path(out_dir), timeout_s=timeout)
+        typer.echo(f"Écoute de {port} : déclencher le bulk dump sur l'ES-8.", err=True)
+        result = record(
+            port, Path(out_dir), timeout_s=timeout, auto_stop=auto_stop, on_frame=_progress
+        )
+        typer.echo("", err=True)
     except Exception as exc:  # surface explicite : jamais d'échec silencieux
         typer.echo(json.dumps({"error": str(exc), "port": port}))
         raise typer.Exit(code=1) from exc
@@ -113,6 +131,40 @@ def diff(
     _print_json(result)
     if result["changed"]:
         raise typer.Exit(code=1)
+
+
+@app.command()
+def patches(
+    syx: Path = typer.Argument(..., exists=True, readable=True, help="Bulk dump (.syx)."),
+    patch: list[str] = typer.Option(
+        None, "--patch", "-p", help="Patch à sortir (ex. 1-1), répétable. Tous par défaut."
+    ),
+) -> None:
+    """Décode les patchs d'un bulk dump en JSON (champs cartographiés uniquement)."""
+    try:
+        dump = load_dump(syx)
+        wanted = sorted({parse_patch_label(p) for p in patch}) if patch else sorted(dump.patches)
+        missing = [patch_label(i) for i in wanted if i not in dump.patches]
+        if missing:
+            raise CodecError(f"Patch(s) absent(s) ou incomplet(s) dans le dump : {', '.join(missing)}.")
+        decoded = [
+            {"patch": patch_label(i), "index": i, **decode_patch(unpack_7to8(dump.patches[i]))}
+            for i in wanted
+        ]
+    except (CodecError, ValueError) as exc:
+        typer.echo(json.dumps({"error": str(exc), "file": str(syx)}))
+        raise typer.Exit(code=2) from exc
+    _print_json(
+        {
+            "tool": "es8ctl",
+            "schema_version": SCHEMA_VERSION,
+            "source": str(syx),
+            "system_present": dump.system is not None,
+            "incomplete": [patch_label(i) for i in dump.incomplete],
+            "mapped_fields": [f.name for f in PATCH_FIELDS],
+            "patches": decoded,
+        }
+    )
 
 
 def main() -> None:

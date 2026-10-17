@@ -11,8 +11,10 @@ import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Callable
 
 from .codec import (
+    BULK_LAST_COUNTER,
     CodecError,
     is_es8_bulk_frame,
     parse_es8_bulk_frame,
@@ -60,6 +62,16 @@ def _decode_entry(index: int, frame: bytes, address_size: int) -> tuple[dict, st
     return entry, None
 
 
+def _bulk_counter(frame: bytes) -> int | None:
+    """Compteur d'une trame de bulk ES-8 valide, None sinon (jamais d'exception)."""
+    if not is_es8_bulk_frame(frame):
+        return None
+    try:
+        return parse_es8_bulk_frame(frame).counter
+    except CodecError:
+        return None
+
+
 def list_ports() -> list[str]:
     """Liste les ports d'entrée MIDI disponibles."""
     import mido
@@ -81,14 +93,22 @@ def record(
     out_dir: Path,
     timeout_s: float | None = None,
     address_size: int = 4,
+    auto_stop: bool = True,
+    on_frame: Callable[[int, int | None], None] | None = None,
 ) -> CaptureResult:
     """Écoute `port` et enregistre toutes les trames SysEx reçues.
 
     Seules les messages SysEx sont conservés ; tout le reste est compté
     dans `ignored_count`. Chaque trame est écrite dans le `.syx` dès sa
     réception : un arrêt brutal (crash, Ctrl-C) ne perd jamais ce qui a
-    déjà été reçu. Se termine sur KeyboardInterrupt (Ctrl-C) ou après
-    `timeout_s` secondes si fourni.
+    déjà été reçu. Se termine sur KeyboardInterrupt (Ctrl-C), après
+    `timeout_s` secondes si fourni, ou — si `auto_stop` — à la réception de
+    la dernière trame d'un bulk dump ES-8 (compteur BULK_LAST_COUNTER).
+    L'ES-8 peut marquer une pause de plusieurs minutes en cours de dump :
+    aucun délai d'inactivité n'arrête donc la capture.
+
+    `on_frame(nombre de trames reçues, compteur ES-8 ou None)` est appelé
+    après chaque trame SysEx, pour l'affichage de la progression.
     """
     import time
 
@@ -111,7 +131,13 @@ def record(
                     if msg.type == "sysex":
                         frame = bytes([0xF0, *msg.data, 0xF7])
                         sink.write(frame)
+                        sink.flush()
                         frames.append(frame)
+                        counter = _bulk_counter(frame)
+                        if on_frame is not None:
+                            on_frame(len(frames), counter)
+                        if auto_stop and counter == BULK_LAST_COUNTER:
+                            break
                     else:
                         ignored += 1
                 elif deadline is not None and time.monotonic() >= deadline:
