@@ -6,6 +6,11 @@ dist/
 build/
 .pytest_cache/
 
-# Données personnelles : backups de l'utilisateur, jamais committés
+# Dumps personnels : capturés dans captures/, jamais committés
+# (les fixtures de test sont copiées explicitement vers tests/fixtures/)
+captures/*
+!captures/README.md
+
+# Backups de l'utilisateur
 backups/
 *.bel
