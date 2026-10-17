@@ -24,12 +24,14 @@ Organisation d'un dump complet (dumps différentiels du 2026-10-17) :
   Un dump observé s'arrête au compteur 1614 : le patch 100-8 n'y a que sa
   première trame (question ouverte).
 
-Encodage d'un patch : les 286 octets MIDI sont des groupes de 8 octets,
-un octet porteur suivi de 7 octets de données ; le bit 6 du porteur est
-le bit 7 du premier octet de données, le bit 5 celui du second, etc. Le
-dernier groupe est partiel (porteur + 5). On obtient 250 octets de
-données 8 bits, lus comme un flux de bits MSB d'abord. Le nom (16
-caractères ASCII de 7 bits) commence au bit 195.
+Encodage d'une page (spec Roland « ES-8 Bulk Dump Messages ») : 250 octets
+de données, transmis en deux messages de 125 octets. Chaque message est
+encodé séparément en groupes de 8 octets MIDI : un octet porteur suivi de
+7 octets de données ; le bit 6 du porteur est le bit 7 du premier octet
+de données, le bit 5 celui du second, etc. 17 groupes complets + un groupe
+final (porteur + 6) = 143 octets MIDI → 125 octets. Les 250 octets se
+lisent comme un flux de bits MSB d'abord. Le nom d'un patch (16 caractères
+ASCII de 7 bits) commence au bit 195.
 """
 
 from __future__ import annotations
@@ -60,7 +62,8 @@ PATCH_COUNT = 800
 PATCHES_PER_BANK = 8
 
 GROUP_LEN = 8  # 1 octet porteur + 7 octets de données
-PATCH_DATA_LEN = 250  # 35 groupes complets × 7 + groupe final de 5
+MESSAGE_DATA_LEN = 125  # 17 groupes complets × 7 + groupe final de 6
+PATCH_DATA_LEN = PATCH_FRAMES * MESSAGE_DATA_LEN  # 250 : une page
 
 PATCH_NAME_BIT = 195
 PATCH_NAME_LEN = 16
@@ -213,6 +216,30 @@ def pack_8to7(data: bytes) -> bytes:
         out.append(carrier)
         out.extend(byte & 0x7F for byte in chunk)
     return bytes(out)
+
+
+def unpack_page(record: bytes) -> bytes:
+    """Dépaquette une page (2 messages de 143 octets MIDI) en 250 octets de données.
+
+    Chaque message est encodé indépendamment : dépaqueter les 286 octets
+    d'un seul tenant décalerait toute la seconde moitié de la page.
+    """
+    if len(record) != PATCH_RECORD_LEN:
+        raise CodecError(f"Page de {len(record)} octets MIDI, {PATCH_RECORD_LEN} attendus.")
+    return b"".join(
+        unpack_7to8(record[i * BULK_DATA_LEN : (i + 1) * BULK_DATA_LEN])
+        for i in range(PATCH_FRAMES)
+    )
+
+
+def pack_page(data: bytes) -> bytes:
+    """Empaquette 250 octets de données en une page de 2 messages. Inverse de unpack_page."""
+    if len(data) != PATCH_DATA_LEN:
+        raise CodecError(f"Page de {len(data)} octets, {PATCH_DATA_LEN} attendus.")
+    return b"".join(
+        pack_8to7(data[i * MESSAGE_DATA_LEN : (i + 1) * MESSAGE_DATA_LEN])
+        for i in range(PATCH_FRAMES)
+    )
 
 
 def get_bits(data: bytes, offset: int, width: int) -> int:

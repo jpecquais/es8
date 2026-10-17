@@ -6,11 +6,11 @@ et la séquence de travail.
 ## État actuel
 
 Étapes 0 et 1 quasi terminées : le bulk dump est capturé, encodé/décodé bit
-à bit, et **tous les champs des patchs sont décodés** (`es8ctl patches`),
-grâce à la spec officielle Roland (firmware v1) recalée sur le firmware v2
-par dumps différentiels — voir `docs/bulk-format.md`. Reste : le bloc
-système, la confirmation de quelques champs v2, puis l'écriture (étape 2).
-Aucune écriture vers l'ES-8 n'existe : l'outil est read-only.
+à bit, et **les patchs comme le bloc système sont décodés** (`es8ctl
+patches`, `es8ctl system`), grâce à la spec officielle Roland (firmware v1)
+recalée sur le firmware v2 — voir `docs/bulk-format.md`. Reste : confirmer
+quelques champs v2, puis l'écriture (étape 2). Aucune écriture vers l'ES-8
+n'existe : l'outil est read-only.
 
 ## Installation
 
@@ -61,19 +61,22 @@ uv sync
    ```sh
    es8ctl patches captures/<dump>.syx            # les 799 patchs complets
    es8ctl patches captures/<dump>.syx -p 1-1 -p 2-3
+   es8ctl system captures/<dump>.syx             # réglages + tables de PC
    ```
 
 ## Structure
 
 ```
 src/es8ctl/
-  cli.py          # typer : devices · capture · inspect · diff · patches
+  cli.py          # typer : devices · capture · inspect · diff · patches · system
   capture.py      # écoute MIDI, enregistrement, sidecar JSON
   diff.py         # comparaison de dumps (système, patchs bit à bit)
-  patch.py        # carte complète des champs de patch (v2), décodage/encodage JSON
+  layout.py       # champs empaquetés au bit ↔ JSON (mécanique commune)
+  patch.py        # carte complète des champs de patch (v2)
+  system.py       # carte du bloc système (v2)
   codec/
     roland.py     # enveloppe SysEx Roland, checksum, décodage DT1/RQ1
-    es8.py        # trames de bulk ES-8, découpage, empaquetage 8→7, noms
+    es8.py        # trames de bulk ES-8, découpage, pages (2 messages 8→7)
 docs/
   bulk-format.md  # notes de RE + protocole des dumps différentiels
 tests/

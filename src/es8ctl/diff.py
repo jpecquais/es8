@@ -23,7 +23,7 @@ from .codec import (
     patch_name,
     split_dump,
     split_frames,
-    unpack_7to8,
+    unpack_page,
 )
 
 
@@ -80,7 +80,7 @@ def diff_dumps(a: BulkDump, b: BulkDump) -> dict:
     for index in sorted(a.patches.keys() & b.patches.keys()):
         if a.patches[index] == b.patches[index]:
             continue
-        old, new = unpack_7to8(a.patches[index]), unpack_7to8(b.patches[index])
+        old, new = unpack_page(a.patches[index]), unpack_page(b.patches[index])
         entry = {
             "patch_index": index,
             "patch": patch_label(index),

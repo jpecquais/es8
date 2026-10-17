@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from es8ctl.codec import CodecError, parse_patch_label, patch_label, unpack_7to8
+from es8ctl.codec import CodecError, parse_patch_label, patch_label, unpack_page
 from es8ctl.diff import load_dump
 from es8ctl.patch import (
     FIELDS_BY_NAME,
@@ -35,11 +35,11 @@ def dump1():
 @pytest.fixture(scope="module")
 def all_patches(dump1):
     dump2 = load_dump(FIXTURES / "es8_bulk_session2_name_A.syx")
-    return [unpack_7to8(r) for d in (dump1, dump2) for r in d.patches.values()]
+    return [unpack_page(r) for d in (dump1, dump2) for r in d.patches.values()]
 
 
 def data(dump, label):
-    return unpack_7to8(dump.patches[parse_patch_label(label)])
+    return unpack_page(dump.patches[parse_patch_label(label)])
 
 
 def test_layout_is_contiguous_and_fits_page():
@@ -70,10 +70,16 @@ def test_all_values_in_range(all_patches):
 
 def test_factory_patch_matches_editor_defaults(dump1):
     records = list(dump1.patches.values())
-    factory = decode_patch(unpack_7to8(max(set(records), key=records.count)))
+    factory = decode_patch(unpack_page(max(set(records), key=records.count)))
     assert factory["name"] == "BOSS ES-8       "
     for name, value in ORACLE_DEFAULTS.items():
         assert factory[name] == value, name
+    # Seconde moitié de page (octets 125+) : défauts uniformes sur les 12 assigns.
+    # Un dépaquetage de la page d'un seul tenant y produisait des valeurs disparates.
+    assert factory["assign_target_cc_no"] == [80] * 12
+    assert factory["assign_int_pedal_time"] == [30] * 12
+    assert factory["assign_wave_pedal_rate"] == [7] * 12
+    assert factory["assign_wave_pedal_form"] == [2] * 12
 
 
 def test_decode_user_patch(dump1):

@@ -4,6 +4,7 @@ from .es8 import (
     BULK_DATA_LEN,
     BULK_LAST_COUNTER,
     ES8_BULK_HEADER,
+    MESSAGE_DATA_LEN,
     PATCH_COUNT,
     PATCH_DATA_LEN,
     PATCH_FIRST_COUNTER,
@@ -16,6 +17,7 @@ from .es8 import (
     get_bits,
     is_es8_bulk_frame,
     pack_8to7,
+    pack_page,
     parse_es8_bulk_frame,
     parse_patch_label,
     patch_label,
@@ -23,6 +25,7 @@ from .es8 import (
     set_bits,
     split_dump,
     unpack_7to8,
+    unpack_page,
 )
 from .roland import (
     CMD_DT1,
@@ -49,6 +52,7 @@ __all__ = [
     "ES8BulkMessage",
     "ES8_BULK_HEADER",
     "NotRolandSysex",
+    "MESSAGE_DATA_LEN",
     "PATCH_COUNT",
     "PATCH_DATA_LEN",
     "PATCH_FIRST_COUNTER",
@@ -62,6 +66,7 @@ __all__ = [
     "get_bits",
     "is_es8_bulk_frame",
     "pack_8to7",
+    "pack_page",
     "parse_es8_bulk_frame",
     "parse_frame",
     "parse_patch_label",
@@ -72,4 +77,5 @@ __all__ = [
     "split_dump",
     "split_frames",
     "unpack_7to8",
+    "unpack_page",
 ]

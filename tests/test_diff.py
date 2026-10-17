@@ -18,10 +18,12 @@ from es8ctl.codec import (
     frames_by_counter,
     get_bits,
     pack_8to7,
+    pack_page,
     patch_label,
     patch_name,
     set_bits,
     unpack_7to8,
+    unpack_page,
 )
 from es8ctl.codec.es8 import PATCH_NAME_BIT, PATCH_NAME_CHAR_BITS, PATCH_NAME_LEN
 from es8ctl.diff import diff_files, load_dump
@@ -56,9 +58,9 @@ def test_split_with_system_block(dump2):
 def test_unpack_pack_roundtrip_all_patches(dump1, dump2):
     for dump in (dump1, dump2):
         for record in dump.patches.values():
-            data = unpack_7to8(record)
+            data = unpack_page(record)
             assert len(data) == PATCH_DATA_LEN
-            assert pack_8to7(data) == record
+            assert pack_page(data) == record
 
 
 def test_unpack_rejects_stray_carrier_bits():
@@ -66,11 +68,26 @@ def test_unpack_rejects_stray_carrier_bits():
         unpack_7to8(bytes([0x01, 0, 0, 0, 0, 0]))  # porteur de 5 données : bits 0-1 réservés
 
 
+def test_pack_8to7_roundtrip_message():
+    data = bytes(range(0, 250, 2))  # 125 octets, bits de poids fort variés
+    packed = pack_8to7(data)
+    assert len(packed) == BULK_DATA_LEN
+    assert unpack_7to8(packed) == data
+
+
+def test_page_is_two_independently_packed_messages(dump2):
+    """Spec Roland : chaque message de 125 octets est encodé séparément."""
+    record = dump2.system[BULK_DATA_LEN * 2 : BULK_DATA_LEN * 4]  # page système 2
+    data = unpack_page(record)
+    assert data[:125] == unpack_7to8(record[:BULK_DATA_LEN])
+    assert data[125:] == unpack_7to8(record[BULK_DATA_LEN:])
+
+
 def test_patch_names(dump1, dump2):
-    names = [patch_name(unpack_7to8(r)) for r in dump1.patches.values()]
+    names = [patch_name(unpack_page(r)) for r in dump1.patches.values()]
     assert names.count("BOSS ES-8       ") == 751
-    assert patch_name(unpack_7to8(dump1.patches[7])) == "TEMPLATE        "
-    assert patch_name(unpack_7to8(dump2.patches[0])) == "AAAAAAAAAAAAAAAA"
+    assert patch_name(unpack_page(dump1.patches[7])) == "TEMPLATE        "
+    assert patch_name(unpack_page(dump2.patches[0])) == "AAAAAAAAAAAAAAAA"
 
 
 def test_bits_roundtrip():

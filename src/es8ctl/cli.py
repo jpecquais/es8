@@ -1,4 +1,4 @@
-"""CLI es8ctl : devices · capture · inspect · diff · patches.
+"""CLI es8ctl : devices · capture · inspect · diff · patches · system.
 
 Sortie JSON machine-first par défaut. Read-only : aucune de ces commandes
 n'émet quoi que ce soit vers l'ES-8.
@@ -12,9 +12,10 @@ from pathlib import Path
 import typer
 
 from .capture import CaptureResult, inspect_file, list_ports, record
-from .codec import BULK_LAST_COUNTER, CodecError, parse_patch_label, patch_label, unpack_7to8
+from .codec import BULK_LAST_COUNTER, CodecError, parse_patch_label, patch_label, unpack_page
 from .diff import diff_files, load_dump
 from .patch import FIRMWARE, SCHEMA_VERSION, decode_patch, out_of_range
+from .system import decode_system, system_out_of_range
 
 app = typer.Typer(
     add_completion=False,
@@ -149,7 +150,7 @@ def patches(
             raise CodecError(f"Patch(s) absent(s) ou incomplet(s) dans le dump : {', '.join(missing)}.")
         decoded = []
         for i in wanted:
-            fields = decode_patch(unpack_7to8(dump.patches[i]))
+            fields = decode_patch(unpack_page(dump.patches[i]))
             entry = {"patch": patch_label(i), "index": i, **fields}
             warnings = out_of_range(fields)
             if warnings:
@@ -169,6 +170,34 @@ def patches(
             "patches": decoded,
         }
     )
+
+
+@app.command()
+def system(
+    syx: Path = typer.Argument(..., exists=True, readable=True, help="Bulk dump (.syx)."),
+) -> None:
+    """Décode le bloc système d'un bulk dump en JSON (clés alignées sur le .bel)."""
+    try:
+        dump = load_dump(syx)
+        if dump.system is None:
+            raise CodecError(
+                "Bloc système absent (trames 0-15) : lancer la capture avant le dump."
+            )
+        fields = decode_system(dump.system)
+    except (CodecError, ValueError) as exc:
+        typer.echo(json.dumps({"error": str(exc), "file": str(syx)}))
+        raise typer.Exit(code=2) from exc
+    payload = {
+        "tool": "es8ctl",
+        "schema_version": SCHEMA_VERSION,
+        "source": str(syx),
+        "firmware": FIRMWARE,
+        "system": fields,
+    }
+    warnings = system_out_of_range(fields)
+    if warnings:
+        payload["warnings"] = warnings
+    _print_json(payload)
 
 
 def main() -> None:
