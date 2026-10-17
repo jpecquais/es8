@@ -11,8 +11,8 @@ import pytest
 
 from es8ctl.codec import (
     BULK_DATA_LEN,
-    BULK_FIRST_COUNTER,
     BULK_LAST_COUNTER,
+    PATCH_FIRST_COUNTER,
     ChecksumError,
     CodecError,
     NotRolandSysex,
@@ -46,8 +46,10 @@ def test_all_checksums_valid(frames):
 
 
 def test_counter_sequence_complete_no_gaps(frames):
+    # Cette capture a manqué le bloc système (compteurs 0-15) : elle
+    # commence au premier patch.
     counters = [parse_es8_bulk_frame(f).counter for f in frames]
-    assert counters[0] == BULK_FIRST_COUNTER
+    assert counters[0] == PATCH_FIRST_COUNTER
     assert counters[-1] == BULK_LAST_COUNTER
     assert all(b - a == 1 for a, b in zip(counters, counters[1:]))
 

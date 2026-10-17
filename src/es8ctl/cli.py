@@ -1,4 +1,4 @@
-"""CLI es8ctl : devices · capture · inspect.
+"""CLI es8ctl : devices · capture · inspect · diff.
 
 Sortie JSON machine-first par défaut. Read-only : aucune de ces commandes
 n'émet quoi que ce soit vers l'ES-8.
@@ -13,6 +13,7 @@ import typer
 
 from .capture import CaptureResult, inspect_file, list_ports, record
 from .codec import CodecError
+from .diff import diff_files
 
 app = typer.Typer(
     add_completion=False,
@@ -93,6 +94,25 @@ def inspect(
     _print_json(result)
     if result["decode_errors"]:
         raise typer.Exit(code=2)
+
+
+@app.command()
+def diff(
+    a: Path = typer.Argument(..., exists=True, readable=True, help="Dump de référence (.syx)."),
+    b: Path = typer.Argument(..., exists=True, readable=True, help="Dump à comparer (.syx)."),
+) -> None:
+    """Compare deux bulk dumps : écarts par patch, octet et bit.
+
+    Code de sortie : 0 identiques, 1 différents, 2 erreur.
+    """
+    try:
+        result = diff_files(a, b)
+    except (CodecError, ValueError) as exc:
+        typer.echo(json.dumps({"error": str(exc), "a": str(a), "b": str(b)}))
+        raise typer.Exit(code=2) from exc
+    _print_json(result)
+    if result["changed"]:
+        raise typer.Exit(code=1)
 
 
 def main() -> None:

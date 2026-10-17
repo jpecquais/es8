@@ -25,6 +25,41 @@ def _now_iso() -> str:
     return datetime.now(UTC).isoformat(timespec="seconds")
 
 
+def _decode_entry(index: int, frame: bytes, address_size: int) -> tuple[dict, str | None]:
+    """Décode une trame pour le sidecar / inspect ; rend (entrée, erreur ou None).
+
+    Les trames de bulk ES-8 ont leur propre format (compteur, pas
+    d'adresse Roland) : les passer au décodeur Roland générique donnerait
+    un faux échec de checksum.
+    """
+    entry: dict = {"index": index, "size": len(frame), "hex": frame.hex(" ")}
+    try:
+        if is_es8_bulk_frame(frame):
+            msg = parse_es8_bulk_frame(frame)
+            entry["decoded"] = {
+                "format": "es8-bulk",
+                "counter": msg.counter,
+                "counter_hex": "".join(f"{b:02X}" for b in frame[8:10]),
+                "data_size": len(msg.data),
+                "checksum_valid": msg.checksum_valid,
+            }
+        else:
+            msg = parse_frame(frame, address_size=address_size)
+            entry["decoded"] = {
+                "format": "roland",
+                "device_id": msg.device_id,
+                "model_id": msg.model_id,
+                "command": {0x11: "RQ1", 0x12: "DT1"}.get(msg.command, hex(msg.command)),
+                "address": "".join(f"{b:02X}" for b in msg.address),
+                "data_size": len(msg.data),
+                "checksum_valid": msg.checksum_valid,
+            }
+    except CodecError as exc:
+        entry["error"] = str(exc)
+        return entry, f"trame {index}: {exc}"
+    return entry, None
+
+
 def list_ports() -> list[str]:
     """Liste les ports d'entrée MIDI disponibles."""
     import mido
@@ -114,20 +149,9 @@ def _save(
     decoded_frames = []
     errors: list[str] = []
     for index, frame in enumerate(frames):
-        entry: dict = {"index": index, "size": len(frame), "hex": frame.hex(" ")}
-        try:
-            msg = parse_frame(frame, address_size=address_size)
-            entry["decoded"] = {
-                "device_id": msg.device_id,
-                "model_id": msg.model_id,
-                "command": {0x11: "RQ1", 0x12: "DT1"}.get(msg.command, hex(msg.command)),
-                "address": "".join(f"{b:02X}" for b in msg.address),
-                "data_size": len(msg.data),
-                "checksum_valid": msg.checksum_valid,
-            }
-        except CodecError as exc:
-            entry["error"] = str(exc)
-            errors.append(f"trame {index}: {exc}")
+        entry, error = _decode_entry(index, frame, address_size)
+        if error:
+            errors.append(error)
         decoded_frames.append(entry)
 
     sidecar = {
@@ -166,31 +190,9 @@ def inspect_file(syx_path: Path, address_size: int = 4) -> dict:
     errors = []
     frame_list = list(split_frames(raw))
     for index, frame in enumerate(frame_list):
-        entry = {"index": index, "size": len(frame), "hex": frame.hex(" ")}
-        try:
-            if is_es8_bulk_frame(frame):
-                msg = parse_es8_bulk_frame(frame)
-                entry["decoded"] = {
-                    "format": "es8-bulk",
-                    "counter": msg.counter,
-                    "counter_hex": "".join(f"{b:02X}" for b in frame[8:10]),
-                    "data_size": len(msg.data),
-                    "checksum_valid": msg.checksum_valid,
-                }
-            else:
-                msg = parse_frame(frame, address_size=address_size)
-                entry["decoded"] = {
-                    "format": "roland",
-                    "device_id": msg.device_id,
-                    "model_id": msg.model_id,
-                    "command": {0x11: "RQ1", 0x12: "DT1"}.get(msg.command, hex(msg.command)),
-                    "address": "".join(f"{b:02X}" for b in msg.address),
-                    "data_size": len(msg.data),
-                    "checksum_valid": msg.checksum_valid,
-                }
-        except CodecError as exc:
-            entry["error"] = str(exc)
-            errors.append(f"trame {index}: {exc}")
+        entry, error = _decode_entry(index, frame, address_size)
+        if error:
+            errors.append(error)
         frames.append(entry)
 
     return {
