@@ -44,49 +44,66 @@ def record(
     """Écoute `port` et enregistre toutes les trames SysEx reçues.
 
     Seules les messages SysEx sont conservés ; tout le reste est compté
-    dans `ignored_count`. Se termine sur KeyboardInterrupt (Ctrl-C) ou
-    après `timeout_s` secondes si fourni.
+    dans `ignored_count`. Chaque trame est écrite dans le `.syx` dès sa
+    réception : un arrêt brutal (crash, Ctrl-C) ne perd jamais ce qui a
+    déjà été reçu. Se termine sur KeyboardInterrupt (Ctrl-C) ou après
+    `timeout_s` secondes si fourni.
     """
-    import mido
-
     import time
 
+    import mido
+
     out_dir.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
+    syx_path = out_dir / f"dump_{stamp}.syx"
+    json_path = out_dir / f"dump_{stamp}.json"
     started = _now_iso()
     frames: list[bytes] = []
     ignored = 0
 
-    with mido.open_input(port) as inp:
-        deadline = None if timeout_s is None else time.monotonic() + timeout_s
-        while True:
-            msg = inp.poll()
-            if msg is not None:
-                if msg.type == "sysex":
-                    frames.append(bytes([0xF0, *msg.data, 0xF7]))
+    try:
+        with mido.open_input(port) as inp, syx_path.open("wb") as sink:
+            deadline = None if timeout_s is None else time.monotonic() + timeout_s
+            while True:
+                msg = inp.poll()
+                if msg is not None:
+                    if msg.type == "sysex":
+                        frame = bytes([0xF0, *msg.data, 0xF7])
+                        sink.write(frame)
+                        frames.append(frame)
+                    else:
+                        ignored += 1
+                elif deadline is not None and time.monotonic() >= deadline:
+                    break
                 else:
-                    ignored += 1
-            elif deadline is None or time.monotonic() < deadline:
-                time.sleep(0.01)
-                continue
-            if deadline is not None and time.monotonic() >= deadline:
-                break
+                    time.sleep(0.01)
+    except KeyboardInterrupt:
+        pass  # Ctrl-C : finalisation normale, le .syx est déjà complet.
 
-    return _save(out_dir, frames, ignored, port=port, started=started, address_size=address_size)
+    return _save(
+        frames,
+        ignored,
+        port=port,
+        started=started,
+        address_size=address_size,
+        syx_path=syx_path,
+        json_path=json_path,
+    )
 
 
 def _save(
-    out_dir: Path,
     frames: list[bytes],
     ignored: int,
     port: str,
     started: str,
     address_size: int,
+    syx_path: Path,
+    json_path: Path,
 ) -> CaptureResult:
-    stamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
-    syx_path = out_dir / f"dump_{stamp}.syx"
-    json_path = out_dir / f"dump_{stamp}.json"
-
-    syx_path.write_bytes(b"".join(frames))
+    # Le .syx a été écrit incrémentalement pendant la capture ; on ne
+    # fait que vérifier son état final.
+    if not frames and not syx_path.exists():
+        syx_path.write_bytes(b"")
 
     decoded_frames = []
     errors: list[str] = []
