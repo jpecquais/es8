@@ -5,12 +5,12 @@ et la séquence de travail.
 
 ## État actuel
 
-Étape 0 terminée : bulk dump capturé, déterministe, encodé/décodé bit à bit.
-Étape 1 en cours : organisation du dump (bloc système + 800 patchs) et
-encodage des patchs (empaquetage 8→7, flux de bits) établis ; les noms de
-patch, loops, ordre des loops et BPM sont décodés (`es8ctl patches`). La carte des autres champs se construit par dumps
-différentiels — voir `docs/bulk-format.md`. Aucune écriture vers l'ES-8
-n'existe : l'outil est read-only.
+Étapes 0 et 1 quasi terminées : le bulk dump est capturé, encodé/décodé bit
+à bit, et **tous les champs des patchs sont décodés** (`es8ctl patches`),
+grâce à la spec officielle Roland (firmware v1) recalée sur le firmware v2
+par dumps différentiels — voir `docs/bulk-format.md`. Reste : le bloc
+système, la confirmation de quelques champs v2, puis l'écriture (étape 2).
+Aucune écriture vers l'ES-8 n'existe : l'outil est read-only.
 
 ## Installation
 
@@ -55,8 +55,8 @@ uv sync
    es8ctl diff captures/<a>.syx captures/<b>.syx
    ```
 
-6. Les patchs se décodent en JSON (champs déjà cartographiés : loops,
-   ordre des loops, BPM, nom) :
+6. Les patchs se décodent en JSON, avec les clés et la forme du `.bel` de
+   l'éditeur officiel (`loop_sw`, `master_bpm`, `assign_target`…) :
 
    ```sh
    es8ctl patches captures/<dump>.syx            # les 799 patchs complets
@@ -70,7 +70,7 @@ src/es8ctl/
   cli.py          # typer : devices · capture · inspect · diff · patches
   capture.py      # écoute MIDI, enregistrement, sidecar JSON
   diff.py         # comparaison de dumps (système, patchs bit à bit)
-  patch.py        # carte des champs de patch, décodage/encodage JSON
+  patch.py        # carte complète des champs de patch (v2), décodage/encodage JSON
   codec/
     roland.py     # enveloppe SysEx Roland, checksum, décodage DT1/RQ1
     es8.py        # trames de bulk ES-8, découpage, empaquetage 8→7, noms

@@ -28,35 +28,53 @@
 
 ### Carte des champs (patch, bits dépaquetés)
 
-| Champ | Bit | Largeur | Encodage | Confirmé par |
-|---|---|---|---|---|
-| `LOOP_SW` (L1…L8, LV) | 0 | 9 × 1 | 1 = ON | L1 = bit 0 (dump 2), LV = bit 8 (dump 3) |
-| `LOOP_POSITION` | 9 | 22 × 4 | entier | 0–9 une fois, 10–15 deux fois, sur les 2 × 799 patchs |
-| `MASTER_BPM` | 186 | 9 | BPM direct (106 = 106 BPM) | 1-1 : 106 → 107, seul le bit 194 change (dump 4) |
-| Nom | 195 | 16 × 7 | ASCII 7 bits | renommage 1-1 + 53 noms utilisateur lisibles |
+**Référence officielle :** Roland, *ES-8 Bulk Dump Messages* v1.00 (2015),
+<https://static.roland.com/assets/media/pdf/ES-8_Bulk_Dump_Messages_e01_W.pdf>.
+Elle donne, pour chaque paramètre système et patch, octet, bit (compté depuis
+le MSB), largeur et bornes. Elle confirme tout ce qui précède : pages de
+250 octets, encodage 7 bits par groupes de 8, champs empaquetés au bit.
 
-Défaut usine : `BOSS ES-8       ` (751 patchs de la fixture).
+La spec décrit le **firmware v1**. Le firmware v2 (celui de l'ES-8 étudié et
+du `.bel` de l'éditeur) diffère ainsi :
 
-`LOOP_POSITION` : 0–9 apparaissent une fois chacun, 10–15 deux fois et
-s'intercalent librement entre les loops (TOC-FAT : `…6, 10, 5, 11, 3, 12…`).
-Probablement des marqueurs de branches série/parallèle, à confirmer.
+- `loop_position` : 22 valeurs au lieu de 16 (+24 bits) ;
+- `mixer_mode`, `mixer_gain1`, `mixer_gain2` insérés après (+3 bits, 1 bit
+  chacun supposé) → tout ce qui suit est décalé de **+27 bits** ;
+- `midi_clock_out` (1) et `midi_transmit` (8 × 1) ajoutés en fin de page :
+  1998 bits utilisés, 2 bits de bourrage à zéro ;
+- plages élargies sur des assigns actifs : `assign_source` jusqu'à 25,
+  `assign_wave_pedal_rate` à 0, `assign_wave_pedal_form` à 3.
 
-Carte en code : `src/es8ctl/patch.py` (`PATCH_FIELDS`).
+Validation sur les 2 × 799 patchs des fixtures : ancres expérimentales
+(`loop_sw` bit 0, `master_bpm` bit 186 = 159 + 27, `name` bit 195 = 168 + 27),
+patch d'usine identique aux défauts du `.bel` (EXP1 128, EXP2 129, BPM 120,
+CC 80, temps 30…), aucune valeur hors bornes, round-trip bit à bit.
 
-Les champs suivent l'ordre du `.bel` (`ID_PATCH_LOOP_SW`, `ID_PATCH_LOOP_POSITION`,
-…). Entre le bit 97 et le nom (195) devraient se trouver, dans l'ordre :
-`MIXER_MODE`, `MIXER_GAIN1/2`, `CARRY_OVER_LOOP` (9), `INPUT/OUTPUT_SELECT/BUFFER`,
-`OUTPUT_GAIN`, `CTL1–6`, `EXP1/2`, puis `MASTER_BPM` (bits 186–194, confirmé).
-Les BPM des patchs utilisateur se lisent tels quels (76, 95, 105, 120…). Le
-bit 185, toujours à 1, termine donc le champ précédent (`EXP2` ?).
+Carte en code : `src/es8ctl/patch.py` (`PATCH_FIELDS`, avec un niveau de
+confiance par champ : `confirmed` / `spec` / `inferred`).
+
+Défaut usine : `BOSS ES-8       `, 120 BPM.
+
+`loop_position` : 0–9 apparaissent une fois chacun, 10–15 deux fois et
+s'intercalent entre les loops (TOC-FAT : `…6, 10, 5, 11, 3, 12…`) —
+probablement des marqueurs de branches série/parallèle, à confirmer.
+
+### Transmission vers l'ES-8 (pour l'écriture, étape 2)
+
+D'après la spec : les deux messages d'une page doivent être envoyés à la
+suite, dans l'ordre ; un message seul est invalide ; **au moins 50 ms entre
+deux messages**. Des données incohérentes peuvent faire dysfonctionner l'ES-8.
 
 ## Questions ouvertes
 
-1. Patch 100-8 tronqué (compteur 1615 jamais reçu, sur toutes les captures). Fin de
-   dump réelle de l'ES-8 ou dernière trame perdue par l'interface ?
-2. Encodage du bloc système : même empaquetage 8→7 ? Le `.bel` y décrit
-   1029 valeurs.
-3. Carte de bits des ~400 autres champs de patch.
+1. **Dernière trame manquante.** La spec liste le message `0C 4F` (patch
+   100-8, seconde moitié) : le dump complet fait 1616 trames. Les captures
+   s'arrêtent toutes à `0C 4E`. Trame perdue par l'interface DIN ou par la
+   capture ? À tester en USB. En attendant, `capture` s'arrête sur `0C 4E`.
+2. Bloc système : 8 pages dans la spec (page 1 = réglages, pages 2–8 =
+   tables de program change), à décoder et à confronter au v2.
+3. Confirmer par dump les champs `inferred` (`mixer_*`, `midi_clock_out`,
+   `midi_transmit`) et le sens des marqueurs 10–15 de `loop_position`.
 
 ## Protocole — dumps différentiels
 
@@ -76,21 +94,8 @@ es8ctl diff captures/<ref>.syx captures/<new>.syx
 `diff` rapporte, par patch, les plages de bits modifiées (positions dans le
 flux dépaqueté) avec leurs valeurs avant/après. Consigner chaque expérience
 (paramètre, patch, ancienne → nouvelle valeur) avec le nom du fichier.
-Prochaines expériences, sur le patch 1-1, en prenant chaque fois le dump
-précédent comme référence :
 
-| # | Changement | Ce que ça révèle |
-|---|---|---|
-| ~~1~~ | ~~Nom → `AAAAAAAAAAAAAAAA`~~ | fait : nom décodé |
-| ~~2~~ | ~~Loop 1 ON ↔ OFF~~ | fait : bit 0 |
-| ~~2b~~ | ~~Loop V ON ↔ OFF~~ | fait : bit 8 → `LOOP_SW` = bits 0–8 |
-| ~~3~~ | ~~Master BPM 106 → 107~~ | fait : 9 bits, bits 186–194 |
-| 4 | Ordre des loops : échanger les deux premières | table `LOOP_POSITION` (22 valeurs) |
-| 5 | CTL1 de la fonction OFF → une autre | `CTL_FUNC` (16 entrées) |
-| 6 | Même changement que #2 sur le patch 1-2 | confirme l'indépendance des patchs |
-| 7 | Un réglage système (ex. contraste LCD) | encodage du bloc système |
-
-Raccourci majeur : si l'éditeur officiel peut **sauvegarder un `.bel`** de
-l'état courant, le faire dans le même état qu'un dump SysEx. On obtient une
-paire (valeurs connues ↔ bits) pour 800 patchs, et l'inférence de la carte
-devient en grande partie automatique.
+Avec la spec officielle, les dumps différentiels ne servent plus qu'à
+confirmer les champs marqués `inferred` et les écarts v2 : réglage du mixer
+sur 1-1, MIDI clock out d'un patch, un réglage système (contraste LCD), sens
+des marqueurs 10–15 de `loop_position`.

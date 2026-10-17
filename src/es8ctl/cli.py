@@ -14,7 +14,7 @@ import typer
 from .capture import CaptureResult, inspect_file, list_ports, record
 from .codec import BULK_LAST_COUNTER, CodecError, parse_patch_label, patch_label, unpack_7to8
 from .diff import diff_files, load_dump
-from .patch import PATCH_FIELDS, SCHEMA_VERSION, decode_patch
+from .patch import FIRMWARE, SCHEMA_VERSION, decode_patch, out_of_range
 
 app = typer.Typer(
     add_completion=False,
@@ -140,17 +140,21 @@ def patches(
         None, "--patch", "-p", help="Patch à sortir (ex. 1-1), répétable. Tous par défaut."
     ),
 ) -> None:
-    """Décode les patchs d'un bulk dump en JSON (champs cartographiés uniquement)."""
+    """Décode les patchs d'un bulk dump en JSON (forme des clés et valeurs alignée sur le .bel)."""
     try:
         dump = load_dump(syx)
         wanted = sorted({parse_patch_label(p) for p in patch}) if patch else sorted(dump.patches)
         missing = [patch_label(i) for i in wanted if i not in dump.patches]
         if missing:
             raise CodecError(f"Patch(s) absent(s) ou incomplet(s) dans le dump : {', '.join(missing)}.")
-        decoded = [
-            {"patch": patch_label(i), "index": i, **decode_patch(unpack_7to8(dump.patches[i]))}
-            for i in wanted
-        ]
+        decoded = []
+        for i in wanted:
+            fields = decode_patch(unpack_7to8(dump.patches[i]))
+            entry = {"patch": patch_label(i), "index": i, **fields}
+            warnings = out_of_range(fields)
+            if warnings:
+                entry["warnings"] = warnings
+            decoded.append(entry)
     except (CodecError, ValueError) as exc:
         typer.echo(json.dumps({"error": str(exc), "file": str(syx)}))
         raise typer.Exit(code=2) from exc
@@ -161,7 +165,7 @@ def patches(
             "source": str(syx),
             "system_present": dump.system is not None,
             "incomplete": [patch_label(i) for i in dump.incomplete],
-            "mapped_fields": [f.name for f in PATCH_FIELDS],
+            "firmware": FIRMWARE,
             "patches": decoded,
         }
     )
