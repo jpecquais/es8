@@ -12,7 +12,13 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
-from .codec import CodecError, parse_frame, split_frames
+from .codec import (
+    CodecError,
+    is_es8_bulk_frame,
+    parse_es8_bulk_frame,
+    parse_frame,
+    split_frames,
+)
 
 
 def _now_iso() -> str:
@@ -162,15 +168,26 @@ def inspect_file(syx_path: Path, address_size: int = 4) -> dict:
     for index, frame in enumerate(frame_list):
         entry = {"index": index, "size": len(frame), "hex": frame.hex(" ")}
         try:
-            msg = parse_frame(frame, address_size=address_size)
-            entry["decoded"] = {
-                "device_id": msg.device_id,
-                "model_id": msg.model_id,
-                "command": {0x11: "RQ1", 0x12: "DT1"}.get(msg.command, hex(msg.command)),
-                "address": "".join(f"{b:02X}" for b in msg.address),
-                "data_size": len(msg.data),
-                "checksum_valid": msg.checksum_valid,
-            }
+            if is_es8_bulk_frame(frame):
+                msg = parse_es8_bulk_frame(frame)
+                entry["decoded"] = {
+                    "format": "es8-bulk",
+                    "counter": msg.counter,
+                    "counter_hex": "".join(f"{b:02X}" for b in frame[8:10]),
+                    "data_size": len(msg.data),
+                    "checksum_valid": msg.checksum_valid,
+                }
+            else:
+                msg = parse_frame(frame, address_size=address_size)
+                entry["decoded"] = {
+                    "format": "roland",
+                    "device_id": msg.device_id,
+                    "model_id": msg.model_id,
+                    "command": {0x11: "RQ1", 0x12: "DT1"}.get(msg.command, hex(msg.command)),
+                    "address": "".join(f"{b:02X}" for b in msg.address),
+                    "data_size": len(msg.data),
+                    "checksum_valid": msg.checksum_valid,
+                }
         except CodecError as exc:
             entry["error"] = str(exc)
             errors.append(f"trame {index}: {exc}")
