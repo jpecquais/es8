@@ -87,6 +87,7 @@ src/es8ctl/
 docs/
   bulk-format.md  # notes de RE + protocole des dumps différentiels
   sniff-editor.md # écouter l'éditeur officiel (mise en place Windows + Mac)
+  agent-contract.md # piloter l'ES-8 depuis un agent / script
 tests/
 captures/         # dumps bruts de la session hardware (voir captures/README.md)
 ```

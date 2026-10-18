@@ -4,13 +4,27 @@
 Spéc complète : voir §Références. Ce document fixe les décisions, les corrections
 apportées par la recherche initiale, et la séquence de travail.
 
+## 0. Avancement (2026-10-18)
+
+| Étape | État | Détail |
+|---|---|---|
+| 0 — Session hardware n°1 | ✅ | Dump initié au panneau ; 1616 trames ; fixture n°1 |
+| 1 — Noyau offline | ✅ | Format complet décodé (spec Roland v1 recalée sur v2), round-trip bit à bit, schéma JSON aligné `.bel` |
+| 2 — CLI v1 | ✅ | `capture`, `diff`, `patches`, `system`, `apply` (dry-run / `--write`, backup), `verify`, `check` ; écriture vérifiée sur l'ES-8 |
+| 3 — Transformations en masse | ✅ en partie | `transform set` / `swap-loops` / `variants` ; variantes vérifiées sur l'appareil (50/50), tap tempo et swap 6↔7 à écrire |
+| 4 — Temps réel | 🟡 | Relais `es8ctl sniff` prêt ; capture de l'éditeur officiel à faire (`docs/sniff-editor.md`) |
+| 5 — GUI / contrat agent | 🟡 | Contrat agent rédigé (`docs/agent-contract.md`) ; GUI non commencée |
+
+Hors plan : import / export `.bel` (`es8ctl import-bel` / `export-bel`).
+Détails du format et journal des essais : `docs/bulk-format.md`.
+
 ## 1. Décisions actées
 
 - **Langage : Python** (≥ 3.11).
 - **Transport : MIDI DIN via interface USB-MIDI.** *(Corrigé le 2026-10-17 :
   l'ES-8 n'a pas de port USB ; l'hypothèse initiale « USB d'abord » était
-  fausse.)* Interface actuelle : M-Audio MIDISPORT Uno — réception OK mais
-  pertes d'octets occasionnelles, émission non fonctionnelle à ce jour.
+  fausse.)* Interface validée : CME WIDI Jack (Bluetooth MIDI), lecture et
+  écriture. Le MIDISPORT Uno perdait des octets et n'émettait pas.
 - **Offline avant temps réel.** Le palier offline (dump → éditer → restore) ne
   dépend d'aucun reverse-engineering. La carte d'adresses temps réel est un
   travail parallèle (phase 0), jamais un prérequis.
@@ -20,10 +34,11 @@ apportées par la recherche initiale, et la séquence de travail.
 
 | Hypothèse initiale | Correction (recherche 2026-10-17) |
 |---|---|
-| Bulk dump demandé par le CLI (RQ1 hôte) | À vérifier dès la session hardware n°1 : la procédure officielle suggère que le dump est **initié au panneau de l'ES-8**. Si confirmé, `dump` = mode écoute et le diagramme de séquence change. |
+| Bulk dump demandé par le CLI (RQ1 hôte) | Confirmé : le dump est **initié au panneau** ; l'ES-8 ne répond à aucune requête RQ1 connue. `capture` = mode écoute. L'éditeur officiel sait pourtant lire l'appareil : commande à capturer (étape 4). |
 | Transport = DIN vers interface | Confirmé : l'ES-8 n'a pas d'USB, le DIN via interface est le seul transport. |
 | `.bel` partiellement cartographié | Confirmé : `es8-bulk-editor` (qckpckt) ne touche jamais le MIDI, ne traite que des `.bel` (mapping surtout sur les assigns ; projet quasi inactif). Utilisable comme **oracle sémantique**, pas comme base de code. |
 | Carte d'adresses temps réel | Aucune carte publiée n'existe. Le RE (phase 0) est réellement nécessaire. |
+| Format du bulk dump inconnu | Roland publie la spec du bulk dump (firmware v1) : positions et bornes de chaque paramètre. Le v2 insère 27 bits ; tout est recalé et validé. |
 
 ## 3. Stack Python (proposition, ajustable)
 
