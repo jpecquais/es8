@@ -13,7 +13,7 @@ apportées par la recherche initiale, et la séquence de travail.
 | 2 — CLI v1 | ✅ | `capture`, `diff`, `patches`, `system`, `apply` (dry-run / `--write`, backup), `verify`, `check` ; écriture vérifiée sur l'ES-8 |
 | 3 — Transformations en masse | ✅ | Les 3 cas d'usage écrits et vérifiés sur l'appareil : 50 variantes, tap tempo sur 800 patchs, échange 6 ↔ 7 sur 800 patchs (`apply --confirm`) |
 | 4 — Temps réel | ✅ | Protocole de l'éditeur officiel : lecture à distance (`es8ctl read`), commandes directes vérifiées sur l'appareil (`es8ctl patch select/rename/copy/exchange/init`). L'éditeur n'a pas d'adresse par paramètre : l'édition fine passe par l'écriture de pages (`apply`) |
-| 5 — GUI / contrat agent | 🟡 | Interface web (`es8ctl web`) : lecture, édition, bibliothèque, système, écriture vérifiée ; testée sur l'appareil. Reste : hébergement en ligne, table des PC. Contrat agent rédigé (`docs/agent-contract.md`), à relire |
+| 5 — GUI / contrat agent | ✅ | Interface web en anglais (`es8ctl web`, site statique `es8ctl build-web`, publication GitHub Pages prête) : parité vérifiée avec l'éditeur officiel (`docs/editor-parity.md`), testée sur l'appareil. Contrat agent en anglais (`docs/agent-contract.md`) |
 
 Hors plan : import / export `.bel` (`es8ctl import-bel` / `export-bel`).
 Détails du format et journal des essais : `docs/bulk-format.md`.
@@ -131,6 +131,8 @@ agent est documenté : le LLM n'accède qu'au CLI, jamais au MIDI.
 - Dump binaire brut vs `.bel` : structure identique ou non (étape 1).
 - Débit réel USB vs DIN pour un dump complet (étape 0).
 - Comportement de l'ES-8 sur réception partielle d'un restore (dès l'étape 2).
+  *Simulé (`tests/test_interrupted_write.py`) : la relecture répare tous les cas ;
+  reste à savoir ce que l'appareil fait d'une demi-page seule.*
 
 ## 7. Références
 

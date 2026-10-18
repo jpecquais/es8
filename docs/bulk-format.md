@@ -255,3 +255,16 @@ moments d'une écriture de 6 patchs (champs dans les deux moitiés de page) :
 Reste inconnu sur le vrai appareil : ce qu'il fait d'une demi-page seule.
 Les deux hypothèses sont couvertes ; la vérification par relecture rend la
 question sans conséquence tant qu'on relit avant de considérer une page écrite.
+
+## Orientation de la chaîne (2026-10-18)
+
+`loop_position` va de la **sortie** vers l'**entrée** : l'éditeur officiel
+dessine OUTPUT à gauche, puis L8 … L1 V, puis INPUT à droite pour le patch
+d'usine `87654321V`, et sa chaîne interne est la liste inversée. L'écran de
+l'ES-8 suit l'ordre de la liste. L'interface web dessine le signal de
+l'entrée (à gauche) vers la sortie.
+
+Règles matérielles reprises de l'éditeur officiel (`routing.problems`) :
+2 mixers partagés entre blocs MIX et loops en carry-over (2 pour une loop 7
+ou 8 en retour stéréo), pas de bloc dans un bloc, SEPARATE (marqueurs 13-15)
+uniquement côté sortie ou juste avant une loop 8 stéréo.

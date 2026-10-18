@@ -1,62 +1,70 @@
-# Contrat agent — piloter l'ES-8 avec `es8ctl`
+# Agent contract: driving the ES-8 with `es8ctl`
 
-À l'intention d'un agent (LLM) ou d'un script. **L'agent n'accède qu'au
-CLI, jamais au MIDI directement.** Toutes les écritures passent par
-`es8ctl apply`, qui valide, simule, sauvegarde et n'envoie qu'avec `--write`.
+For an AI agent (LLM) or a script. **The agent only uses the CLI, never MIDI
+directly.** Every write goes through `es8ctl apply`, which validates,
+simulates, backs up and only sends with `--write`.
 
-## Principes
+## Principles
 
-- Sortie JSON sur stdout ; progression et rappels sur stderr.
-- Codes de sortie déterministes : `0` succès, `1` écart constaté
-  (`diff`, `verify`, `check`), `2` entrée invalide (rien n'est envoyé),
-  `3` écriture interrompue (partielle — re-dumper et vérifier).
-- Patchs nommés comme sur l'écran : `0-1` … `99-8` (banque 0–99, numéro 1–8).
-- Valeurs : forme du `.bel` de l'éditeur officiel (entier, liste, ou chaîne
-  pour `name`). Index et valeurs symboliques acceptés par `transform set`
-  (`ctl_func[NUM_8]=BPM`, `loop_sw[L6]=1`).
-- Chaîne de loops en notation écran : `loop_chain`, ex. `V8746(3//5)21`
-  (`V` = loop volume, `1`–`8` = loops, `(a//b)` = parallèle).
+- JSON on stdout; progress and reminders on stderr.
+- Predictable exit codes: `0` success, `1` a difference was found
+  (`diff`, `verify`, `check`), `2` invalid input (nothing is sent),
+  `3` write interrupted (partial: read the ES-8 again and check).
+- Patches are named as on the ES-8 display: `0-1` … `99-8` (bank 0–99,
+  number 1–8).
+- Values have the same shape as in the official editor's `.bel` files
+  (integer, list, or string for `name`). `transform set` also accepts
+  symbolic indexes and values (`ctl_func[NUM_8]=BPM`, `loop_sw[L6]=1`).
+- Loop chain in the display notation: `loop_chain`, e.g. `V8746(3//5)21`
+  (`V` = volume loop, `1`–`8` = loops, `(a//b)` = MIX block,
+  `[a//b]` = SEPARATE block). The notation runs from the output side to the
+  input side, as on the ES-8 display.
+- Chains the ES-8 cannot run are refused (exit code 2): at most 2 mixers,
+  shared by MIX blocks and carry-over loops; no block inside another block;
+  SEPARATE only at the output end.
 
-## Ce que l'agent ne peut pas faire seul
+## What the agent cannot do alone
 
-- **Garantir la réception** : après un dump, l'ES-8 reste sur l'écran Bulk
-  Dump où il **ignore sans erreur** tout ce qu'il reçoit. Avant toute
-  écriture, demander à l'humain d'appuyer sur EXIT (écran de jeu).
+- **Make sure the ES-8 listens.** After a dump started from its panel, the
+  ES-8 stays on the Bulk Dump screen, where it **silently ignores**
+  everything it receives. Before any write, ask the human to press EXIT
+  (play screen).
 
-Lire l'appareil ne demande aucun geste : `es8ctl read` l'interroge à distance.
+Reading needs no action on the pedal: `es8ctl read` and `es8ctl names` query
+it remotely.
 
-## Boucle type
+## Typical loop
 
 ```sh
-es8ctl read --port "WIDI Jack Bluetooth"             # état actuel → captures/read_*.syx
-es8ctl patches captures/<dump>.syx -p 0-8            # lire
+es8ctl names --port WIDI                             # find patches by name (≈ 7 s)
+es8ctl read --port WIDI --patches 0-1..0-8           # current state → captures/read_*.syx
+es8ctl patches captures/<dump>.syx -p 0-8            # read
 es8ctl transform set "master_bpm=120" -b captures/<dump>.syx --patches 0-1..0-8 -o changes.json
-es8ctl apply changes.json -b captures/<dump>.syx     # simulation : lire "changes"
-es8ctl apply changes.json -b captures/<dump>.syx --write --port "WIDI Jack Bluetooth" --confirm
-# --confirm relit et renvoie les pages perdues ; "confirmed": true = enregistré
-es8ctl read --port "WIDI Jack Bluetooth"             # facultatif : relecture complète
-es8ctl check changes.json captures/<nouvelle lecture>.syx  # 0 = tout est appliqué
+es8ctl apply changes.json -b captures/<dump>.syx     # dry run: read "changes"
+es8ctl apply changes.json -b captures/<dump>.syx --write --port WIDI --confirm
+# --confirm reads back and resends lost pages; "confirmed": true = stored
+es8ctl check changes.json captures/<new read>.syx    # 0 = everything applied
 ```
 
-## Commandes
+## Commands
 
-| Commande | Rôle | Entrée → sortie |
+| Command | Purpose | Input → output |
 |---|---|---|
-| `devices` | ports MIDI | → `{input_ports, output_ports}` |
-| `names` | les 800 noms de patchs (≈ 7 s) | port → {"0-1": nom, …} |
-| `read` | lire l'appareil à distance | port → `.syx` (complet ou partiel) ; code 1 si des pages manquent |
-| `capture` | enregistrer un dump déclenché au panneau | port → `.syx` + sidecar |
-| `patches` | lire des patchs | `.syx` [`-p 0-1`] → `{patches: [{patch, …champs, loop_chain}]}` |
-| `system` | lire le système | `.syx` → `{system: {…}}` |
-| `diff` | comparer deux dumps | → plages de bits par patch |
-| `transform set` / `swap-loops` / `variants` | préparer des changements | `.syx` → changements JSON |
-| `import-bel` / `export-bel` | interop. éditeur officiel | `.bel` ⇄ changements / `.syx` → `.bel` |
-| `patch select` / `rename` / `copy` / `exchange` / `init` | action directe | simulation ; `--write` : sauvegarde, envoi, relecture → `confirmed` |
-| `apply` | écrire | changements + `.syx` de base → plan ; `--write` envoie |
-| `verify` | dump attendu = dump réel ? | ignore le patch sélectionné (`current_num`) |
-| `check` | changements présents dans un dump ? | par patch : `applied`, `mismatches` |
+| `devices` | MIDI ports | → `{input_ports, output_ports}` |
+| `names` | the 800 patch names (≈ 7 s) | port → `{"0-1": name, …}` |
+| `read` | read the ES-8 remotely | port → `.syx` (complete or partial); exit 1 if pages are missing |
+| `capture` | record a dump started from the panel | port → `.syx` + sidecar |
+| `patches` | read patches | `.syx` [`-p 0-1`] → `{patches: [{patch, …fields, loop_chain}]}` |
+| `system` | read the system settings | `.syx` → `{system: {…}}` |
+| `diff` | compare two dumps | → bit ranges per patch |
+| `transform set` / `swap-loops` / `variants` | prepare changes | `.syx` → changes JSON |
+| `import-bel` / `export-bel` | official editor files | `.bel` ⇄ changes / `.syx` → `.bel` |
+| `patch select` / `rename` / `copy` / `exchange` / `init` | direct action | dry run; `--write`: backup, send, read back → `confirmed` |
+| `apply` | write | changes + base `.syx` → plan; `--write` sends |
+| `verify` | expected dump = actual dump? | ignores the selected patch (`current_num`) |
+| `check` | are changes present in a dump? | per patch: `applied`, `mismatches` |
 
-## Format des changements
+## Changes format
 
 ```json
 {
@@ -66,16 +74,15 @@ es8ctl check changes.json captures/<nouvelle lecture>.syx  # 0 = tout est appliq
 }
 ```
 
-Seuls les champs fournis changent ; tous les autres bits (y compris non
-cartographiés) sont repris du dump de base. Champ inconnu ou valeur hors
-bornes → code 2, rien n'est envoyé.
+Only the given fields change; every other bit (including unmapped ones) is
+taken from the base dump. An unknown field or an out-of-range value gives
+exit code 2 and nothing is sent.
 
-## Règles de sûreté (non négociables)
+## Safety rules (not negotiable)
 
-1. Toujours partir d'un dump **frais** : la base doit refléter l'appareil.
-2. Toujours simuler avant `--write`, et montrer les `changes` à l'humain
-   pour toute écriture de masse.
-3. Toujours vérifier après écriture (`--confirm`, ou `read` + `check`) :
-   sans `--confirm`, un code 0 de `apply` signifie « envoyé », pas
-   « enregistré ».
-4. Ne jamais supprimer `backups/` ni réécrire un fichier de `captures/`.
+1. Always start from a **fresh** read: the base must match the ES-8.
+2. Always do a dry run before `--write`, and show the `changes` to the human
+   for any bulk write.
+3. Always check after writing (`--confirm`, or `read` + `check`). Without
+   `--confirm`, exit code 0 from `apply` means "sent", not "stored".
+4. Never delete `backups/` or rewrite a file in `captures/`.
