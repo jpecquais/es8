@@ -249,3 +249,27 @@ def test_read_names_fills_the_list_before_patches():
     loop.close()
     cells = json.loads(webapp.bank_grid())["cells"]
     assert cells[17] == {"patch": "2-2", "missing": True, "name": "SONG 17", "unnamed": False}
+
+
+def test_import_export_factory_and_variants():
+    from es8ctl.factory import factory_fields
+
+    webapp.load_syx(FIXTURE.read_bytes())
+    webapp.discard()
+    # Un .syx dont un patch diffère revient comme modification en attente.
+    from es8ctl.apply import plan_changes
+
+    edited = plan_changes(list(split_frames(FIXTURE.read_bytes())), {"patches": {"0-8": {"master_bpm": 77}}}).expected
+    assert len(bytes(webapp.syx_bytes(json.dumps(["0-8", "system"])))) == 18 * 155
+    result = json.loads(webapp.import_file(edited, "syx"))
+    assert result["patches"] == ["0-8"] and result["imported"] == 1
+    webapp.discard()
+    assert json.loads(webapp.import_file(webapp.bel_text().encode(), "bel"))["imported"] == 0  # aller-retour .bel
+    assert "error" in json.loads(webapp.import_file(b"nope", "bel"))
+    assert json.loads(webapp.stage_factory(json.dumps(["0-8"])))["patches"] == ["0-8"]
+    assert json.loads(webapp.patch_detail("0-8"))["fields"] == factory_fields()
+    webapp.discard()
+    summary = json.loads(webapp.transform_variants("0-8", "20-1", 3, prefix="VAR "))
+    assert summary["patches"] == ["20-1", "20-2", "20-3"]
+    assert json.loads(webapp.patch_detail("20-2"))["name"].startswith("VAR 2")
+    webapp.discard()

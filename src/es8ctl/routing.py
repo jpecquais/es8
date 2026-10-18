@@ -176,11 +176,13 @@ def swap_loops(positions: list[int], a: int, b: int) -> list[int]:
 # ---------------------------------------------------------------- contraintes matérielles
 #
 # Règles de l'éditeur officiel (loop_structure_handle.js), traduites dans
-# l'ordre de la liste (ordre du signal depuis l'entrée) :
+# l'ordre de la liste. Attention : la liste va de la SORTIE vers l'ENTRÉE
+# (l'éditeur dessine OUTPUT à gauche, L8 … L1 V, INPUT à droite pour le
+# patch d'usine 87654321V) ; « début de la liste » = côté sortie.
 # - jeu 10-12 = MIX (deux branches mélangées), jeu 13-15 = SEPARATE ;
 # - pas de bloc dans un bloc ;
-# - un SEPARATE commence en début de chaîne, ou juste après la loop 8 quand
-#   son retour est stéréo ;
+# - un SEPARATE est en tête de liste (dernier bloc avant les sorties), ou
+#   juste après la loop 8 dans la liste quand son retour est stéréo ;
 # - l'ES-8 n'a que 2 mixers, partagés entre les blocs MIX et le carry-over :
 #   une loop en carry-over en prend 1 (2 pour les loops 7 et 8 en retour
 #   stéréo), un bloc MIX en prend 1, et 1 de plus quand une branche commence
@@ -237,7 +239,7 @@ def problems(positions: list[int], carry_over: list[int], stereo7: bool = False,
         out.append("A parallel block cannot contain another block.")
     for b in blocks:
         if b["kind"] == "separate" and not (b["before"] is None or (b["before"] == 8 and stereo8)):
-            out.append("A SEPARATE block must start the chain (or follow loop 8 when its return is stereo).")
+            out.append("A SEPARATE block must be the last block before the outputs (or come just before a stereo loop 8).")
             break
     used = mixers_used(positions, carry_over, stereo7, stereo8)
     if used > MIXERS:

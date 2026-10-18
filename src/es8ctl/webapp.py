@@ -162,11 +162,88 @@ def load_syx(data) -> str:
     return json.dumps({"frames": len(frames), "patches": len(state["dump"].patches)})
 
 
-def syx_bytes():
-    """Dump courant au format .syx (pour téléchargement)."""
+def syx_bytes(labels_json: str | None = None):
+    """Dump affiché au format .syx ; `labels_json` : seulement ces patchs (et « system »)."""
+    from .codec import parse_patch_label
     from .request import frames_to_syx
 
-    return frames_to_syx(state["frames"])
+    if not labels_json:
+        return frames_to_syx(state["frames"])
+    wanted = set()
+    for label in json.loads(labels_json):
+        if label == "system":
+            wanted |= set(range(16))
+        else:
+            first = 2 * patch_page(parse_patch_label(label))
+            wanted |= {first, first + 1}
+    return frames_to_syx({c: f for c, f in state["frames"].items() if c in wanted})
+
+
+def bel_text() -> str:
+    """État de l'appareil au format .bel (fichiers du BOSS Tone Studio / es8-bulk-editor)."""
+    from .bel import export_bel
+
+    document, _ = export_bel(state["dump"], {c: f[10:-2] for c, f in state["frames"].items()})
+    return json.dumps(document)
+
+
+def import_file(data, kind: str) -> str:
+    """Fichier .syx ou .bel → modifications en attente par rapport à l'appareil.
+
+    Seuls les patchs (et réglages système) qui diffèrent sont ajoutés ; rien
+    n'est envoyé avant « Écrire ».
+    """
+    from .codec import CodecError, parse_es8_bulk_frame
+
+    raw = bytes(data.to_py()) if hasattr(data, "to_py") else bytes(data)
+    if state["dump"] is None:
+        return json.dumps({"error": "Load the ES-8 state first (read it or open a file)."})
+    try:
+        if kind == "bel":
+            from .bel import import_bel
+
+            changes, warnings = import_bel(json.loads(raw.decode("utf-8")), state["dump"])
+        else:
+            incoming = split_dump(split_frames(raw))
+            changes, warnings = {"patches": {}}, []
+            for index, record in incoming.patches.items():
+                current = state["dump"].patches.get(index)
+                if current is None:
+                    warnings.append(f"{patch_label(index)}: not loaded from the ES-8, skipped.")
+                elif record != current:
+                    changes["patches"][patch_label(index)] = decode_patch(unpack_page(record))
+            if incoming.system is not None and state["dump"].system is not None:
+                new, old = decode_system(incoming.system), decode_system(state["dump"].system)
+                system = {k: v for k, v in new.items() if v != old[k] and k != "current_num"}
+                if system:
+                    changes["system"] = system
+    except (CodecError, ValueError, UnicodeDecodeError) as exc:
+        return json.dumps({"error": f"Cannot import this file: {exc}"})
+    result = json.loads(_accept(changes))
+    result["warnings"] = warnings
+    result["imported"] = len(changes["patches"]) + bool(changes.get("system"))
+    return json.dumps(result)
+
+
+def stage_factory(labels_json: str) -> str:
+    """Remet des patchs au patch d'usine (nom « BOSS ES-8 »)."""
+    from .factory import factory_fields
+
+    fields = factory_fields()
+    return _accept({"patches": {label: dict(fields) for label in json.loads(labels_json)}})
+
+
+def transform_variants(source: str, into: str, count: int, seed: int = 0, prefix: str = "",
+                       overwrite: bool = False) -> str:
+    from .codec import CodecError
+    from .transform import op_variants
+
+    try:
+        changes = op_variants(_preview(), source, into, int(count), seed=int(seed),
+                              prefix=prefix or None, overwrite=bool(overwrite))
+    except (CodecError, ValueError) as exc:
+        return json.dumps({"error": str(exc)})
+    return _accept(changes)
 
 
 def _changes() -> dict:
