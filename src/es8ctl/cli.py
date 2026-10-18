@@ -336,11 +336,17 @@ def apply(
     page_gap: float = typer.Option(
         DEFAULT_PAGE_GAP_S, "--page-gap", help="Pause entre deux pages, en secondes (≥ 0,05)."
     ),
+    confirm: bool = typer.Option(
+        False, "--confirm",
+        help="Après l'envoi, relire les pages écrites (RQ1) et renvoyer celles qui ne sont pas conformes.",
+    ),
+    port_in: str = typer.Option(None, "--port-in", help="Port d'écoute pour --confirm, s'il diffère de --port."),
+    rounds: int = typer.Option(3, "--rounds", help="Tours de relecture / renvoi au plus, avec --confirm."),
 ) -> None:
     """Applique des changements à l'ES-8. Simulation par défaut ; --write pour envoyer.
 
-    Codes de sortie : 0 succès, 2 changements ou base invalides, 3 écriture
-    interrompue (partielle).
+    Codes de sortie : 0 succès, 1 pages non confirmées malgré les renvois
+    (--confirm), 2 changements ou base invalides, 3 écriture interrompue.
     """
     try:
         raw = sys.stdin.read() if str(changes) == "-" else changes.read_text(encoding="utf-8")
@@ -394,14 +400,49 @@ def apply(
         typer.echo("", err=True)
         _fail(3, **report, error=f"Écriture interrompue : {exc!r}", sent=sent)
     typer.echo("", err=True)
-    _print_json({
-        **report,
-        "sent": sent,
-        "next_steps": [
-            "es8ctl capture  (puis déclencher le bulk dump au panneau)",
-            f"es8ctl verify {expected} captures/<nouveau dump>.syx",
-        ],
-    })
+    report["sent"] = sent
+    if not confirm:
+        _print_json({
+            **report,
+            "next_steps": [
+                f"es8ctl read --port \"{port}\"",
+                f"es8ctl verify {expected} captures/<nouvelle lecture>.syx",
+            ],
+        })
+        return
+
+    from .apply import pending_pages
+    from .codec import parse_es8_bulk_frame
+    from .request import read_pages
+
+    listen = resolve_port(port_in or port, list_ports())
+    if listen is None:
+        _fail(2, **report, error=f"Port d'écoute introuvable : {port_in or port}")
+    todo = [plan.frames[i : i + 2] for i in range(0, len(plan.frames), 2)]
+    history = []
+    for round_no in range(1, rounds + 1):
+        pages = sorted({parse_es8_bulk_frame(p[0]).counter // 2 for p in todo})
+        typer.echo(f"Relecture de {len(pages)} page(s) (tour {round_no})…", err=True)
+        device, _ = read_pages(port, listen, pages)
+        todo = pending_pages([f for p in todo for f in p], device)
+        history.append({"round": round_no, "checked": len(pages), "pending": len(todo)})
+        if not todo:
+            break
+        typer.echo(f"{len(todo)} page(s) non conforme(s) : renvoi.", err=True)
+        try:
+            send_frames(port, [f for p in todo for f in p], interval_s=interval, page_gap_s=page_gap)
+        except (KeyboardInterrupt, Exception) as exc:
+            _fail(3, **report, confirm=history, error=f"Renvoi interrompu : {exc!r}")
+    else:
+        pages = sorted({parse_es8_bulk_frame(p[0]).counter // 2 for p in todo})
+        device, _ = read_pages(port, listen, pages)
+        todo = pending_pages([f for p in todo for f in p], device)
+        history.append({"round": "final", "checked": len(pages), "pending": len(todo)})
+    labels = sorted({patch_label(parse_es8_bulk_frame(p[0]).counter // 2 - 8)
+                     if parse_es8_bulk_frame(p[0]).counter >= 16 else "système" for p in todo})
+    _print_json({**report, "confirmed": not todo, "confirm": history, "not_confirmed": labels})
+    if todo:
+        raise typer.Exit(code=1)
 
 
 @app.command()

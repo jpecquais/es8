@@ -188,3 +188,37 @@ def check_changes(actual_frames: list[bytes], changes: dict) -> dict:
         "not_applied": [r["target"] for r in results if r["applied"] is False],
         "results": results,
     }
+
+
+def pending_pages(plan_frames: list[bytes], device: dict[int, bytes]) -> list[list[bytes]]:
+    """Pages du plan absentes ou différentes dans une relecture de l'appareil.
+
+    Rend les trames à renvoyer, groupées par page. Pour le bloc système, le
+    patch sélectionné (`current_num`, change à chaque navigation) est ignoré :
+    le renvoyer ramènerait l'ES-8 sur l'ancien patch.
+    """
+    from .codec import parse_es8_bulk_frame
+
+    pages = [plan_frames[i : i + PATCH_FRAMES] for i in range(0, len(plan_frames), PATCH_FRAMES)]
+    pending = []
+    for page in pages:
+        counters = [parse_es8_bulk_frame(f).counter for f in page]
+        got = [device.get(c) for c in counters]
+        if got == page:
+            continue
+        if None not in got and counters[0] < PATCH_FIRST_COUNTER:
+            wanted = decode_system_page(counters[0] // PATCH_FRAMES, b"".join(f[10:-2] for f in page))
+            actual = decode_system_page(counters[0] // PATCH_FRAMES, b"".join(f[10:-2] for f in got))
+            if {k: v for k, v in wanted.items() if k != "current_num"} == {
+                k: v for k, v in actual.items() if k != "current_num"
+            }:
+                continue
+        pending.append(page)
+    return pending
+
+
+def decode_system_page(page: int, record: bytes) -> dict:
+    from .layout import decode_fields
+    from .system import PAGE_FIELDS
+
+    return decode_fields(unpack_page(record), PAGE_FIELDS[page])

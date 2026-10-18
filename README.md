@@ -159,8 +159,12 @@ vérification par re-dump.
 
    ```sh
    es8ctl apply changes.json --base captures/<dump>.syx
-   es8ctl apply changes.json --base captures/<dump>.syx --write --port "WIDI Jack Bluetooth"
+   es8ctl apply changes.json --base captures/<dump>.syx --write --port "WIDI Jack Bluetooth" --confirm
    ```
+
+   `--confirm` relit à distance les pages écrites et renvoie celles qui ne
+   sont pas conformes (jusqu'à 3 tours) : sur 800 pages via Bluetooth,
+   environ 1,6 % se perdent au premier passage.
 
    Codes de sortie : 0 succès, 2 changements ou base invalides, 3 écriture
    interrompue (partielle). Rythme : `--interval` entre les deux messages

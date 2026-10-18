@@ -32,8 +32,9 @@ es8ctl read --port "WIDI Jack Bluetooth"             # état actuel → captures
 es8ctl patches captures/<dump>.syx -p 0-8            # lire
 es8ctl transform set "master_bpm=120" -b captures/<dump>.syx --patches 0-1..0-8 -o changes.json
 es8ctl apply changes.json -b captures/<dump>.syx     # simulation : lire "changes"
-es8ctl apply changes.json -b captures/<dump>.syx --write --port "WIDI Jack Bluetooth"
-es8ctl read --port "WIDI Jack Bluetooth"             # relire l'appareil
+es8ctl apply changes.json -b captures/<dump>.syx --write --port "WIDI Jack Bluetooth" --confirm
+# --confirm relit et renvoie les pages perdues ; "confirmed": true = enregistré
+es8ctl read --port "WIDI Jack Bluetooth"             # facultatif : relecture complète
 es8ctl check changes.json captures/<nouvelle lecture>.syx  # 0 = tout est appliqué
 ```
 
@@ -72,6 +73,7 @@ bornes → code 2, rien n'est envoyé.
 1. Toujours partir d'un dump **frais** : la base doit refléter l'appareil.
 2. Toujours simuler avant `--write`, et montrer les `changes` à l'humain
    pour toute écriture de masse.
-3. Toujours vérifier après écriture (`check` ou `verify`) : un code 0 de
-   `apply` signifie « envoyé », pas « enregistré ».
+3. Toujours vérifier après écriture (`--confirm`, ou `read` + `check`) :
+   sans `--confirm`, un code 0 de `apply` signifie « envoyé », pas
+   « enregistré ».
 4. Ne jamais supprimer `backups/` ni réécrire un fichier de `captures/`.

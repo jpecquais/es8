@@ -242,3 +242,37 @@ def test_cli_verify_ignores_selected_patch(tmp_path):
     contrast = plan_changes(list(split_frames(plan.expected)), {"system": {"others_lcd_contrast": 9}})
     actual.write_bytes(contrast.expected)
     assert CliRunner().invoke(app, ["verify", str(expected), str(actual)]).exit_code == 1
+
+
+def test_pending_pages_after_readback():
+    from es8ctl.apply import pending_pages
+    from es8ctl.codec import frames_by_counter, parse_es8_bulk_frame
+
+    plan = plan_changes(frames(FULL), {"patches": {"0-2": {"master_bpm": 90}, "0-3": {"master_bpm": 91}}})
+    written = {parse_es8_bulk_frame(f).counter: f for f in plan.frames}
+    assert pending_pages(plan.frames, written) == []
+    lost = dict(written)
+    lost.pop(parse_es8_bulk_frame(plan.frames[3]).counter)  # seconde moitié de 0-3 perdue
+    assert pending_pages(plan.frames, lost) == [plan.frames[2:4]]
+    base = frames_by_counter(frames(FULL))
+    untouched = {c: build(c, base[c]) for c in written}  # rien n'a été enregistré
+    assert pending_pages(plan.frames, untouched) == [plan.frames[0:2], plan.frames[2:4]]
+
+
+def build(counter, data):
+    from es8ctl.codec import build_es8_bulk_frame
+
+    return build_es8_bulk_frame(counter, data)
+
+
+def test_pending_pages_ignores_selected_patch_on_system():
+    from es8ctl.apply import pending_pages
+    from es8ctl.codec import parse_es8_bulk_frame
+
+    plan = plan_changes(frames(FULL), {"system": {"others_lcd_contrast": 7}})
+    navigated = plan_changes(list(split_frames(plan.expected)), {"system": {"current_num": 392}})
+    device = {parse_es8_bulk_frame(f).counter: f for f in navigated.frames}
+    assert pending_pages(plan.frames, device) == []
+    other = plan_changes(list(split_frames(plan.expected)), {"system": {"others_lcd_contrast": 2}})
+    device = {parse_es8_bulk_frame(f).counter: f for f in other.frames}
+    assert pending_pages(plan.frames, device) == [plan.frames]
