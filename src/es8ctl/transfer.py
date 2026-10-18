@@ -58,3 +58,24 @@ def send_frames(
             if on_frame is not None:
                 on_frame(sent, len(frames))
     return sent
+
+
+def _fix_mojibake(name: str) -> str:
+    """CoreMIDI via rtmidi rend parfois l'UTF-8 lu en Mac Roman : « R√©seau » → « Réseau »."""
+    try:
+        return name.encode("mac_roman").decode("utf-8")
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        return name
+
+
+def resolve_port(name: str, available: list[str]) -> str | None:
+    """Port réel correspondant à `name` : exact, corrigé de l'encodage, ou préfixe unique."""
+    if name in available:
+        return name
+    wanted = name.casefold()
+    fixed = {port: _fix_mojibake(port).casefold() for port in available}
+    exact = [port for port, f in fixed.items() if f == wanted]
+    if len(exact) == 1:
+        return exact[0]
+    prefix = [port for port, f in fixed.items() if f.startswith(wanted)]
+    return prefix[0] if len(prefix) == 1 else None

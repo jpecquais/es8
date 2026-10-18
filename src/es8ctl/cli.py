@@ -1,4 +1,4 @@
-"""CLI es8ctl : devices · capture · inspect · diff · patches · system · transform · apply · verify · check · export-bel · import-bel.
+"""CLI es8ctl : devices · capture · inspect · diff · patches · system · transform · apply · verify · check · export-bel · import-bel · sniff.
 
 Sortie JSON machine-first par défaut. Seule `apply --write` émet vers l'ES-8,
 après validation complète et sauvegarde horodatée du dump de base.
@@ -85,11 +85,14 @@ def capture(
             typer.echo(f"{i}: {name}", err=True)
         choice = typer.prompt("Port à écouter (numéro)", type=int)
         port = ports[choice]
-    elif port not in ports:
-        typer.echo(
-            json.dumps({"error": f"Port inconnu : {port}", "available": ports})
-        )
-        raise typer.Exit(code=1)
+    else:
+        from .transfer import resolve_port
+
+        resolved = resolve_port(port, ports)
+        if resolved is None:
+            typer.echo(json.dumps({"error": f"Port inconnu : {port}", "available": ports}))
+            raise typer.Exit(code=1)
+        port = resolved
 
     try:
         typer.echo(f"Écoute de {port} : déclencher le bulk dump sur l'ES-8.", err=True)
@@ -367,7 +370,10 @@ def apply(
 
     from .transfer import list_output_ports, send_frames
 
+    from .transfer import resolve_port
+
     outputs = list_output_ports()
+    port = resolve_port(port, outputs) if port is not None else None
     if port is None or port not in outputs:
         _fail(2, error="Port de sortie requis avec --write (voir es8ctl devices).",
               port=port, available=outputs)
@@ -480,6 +486,45 @@ def import_bel_cmd(
     _emit_changes(changes, out, {"op": "import-bel", "bel": str(bel),
                                  "system_changed": sorted(changes.get("system", {})),
                                  "warnings": warnings})
+
+
+@app.command()
+def sniff(
+    editor: str = typer.Option(..., "--editor", help="Port côté éditeur (ex. session réseau rtpMIDI)."),
+    device: str = typer.Option(..., "--device", help="Port côté ES-8 (ex. WIDI Jack Bluetooth)."),
+    out_dir: Path = typer.Option(Path("captures"), "--out", "-o", help="Répertoire du journal."),
+    timeout: float = typer.Option(None, "--timeout", "-t", help="Durée en secondes (sinon Ctrl-C)."),
+) -> None:
+    """Relaie l'éditeur officiel ↔ ES-8 en journalisant chaque message (JSON Lines).
+
+    Seuls les messages de l'éditeur sont transmis à l'ES-8. Ctrl-C pour arrêter.
+    """
+    from .sniff import relay
+    from .transfer import list_output_ports
+
+    from .transfer import resolve_port
+
+    inputs, outputs = list_ports(), list_output_ports()
+    resolved = []
+    for name in (editor, device):
+        port = resolve_port(name, inputs)
+        if port is None or port not in outputs:
+            _fail(2, error=f"Port introuvable en entrée/sortie : {name}", inputs=inputs, outputs=outputs)
+        resolved.append(port)
+    editor, device = resolved
+    if editor == device:
+        _fail(2, error="Les ports éditeur et ES-8 doivent être différents.")
+
+    def show(direction: str, entry: dict) -> None:
+        arrow = "→ ES-8 " if direction.startswith("editor") else "← ES-8 "
+        typer.echo(f"{entry['t']:9.3f} {arrow}{entry['type']:<14} {entry['hex'][:60]}", err=True)
+
+    typer.echo(f"Relais {editor} ⇄ {device} : connecter l'éditeur. Ctrl-C pour arrêter.", err=True)
+    try:
+        result = relay(editor, device, out_dir, timeout_s=timeout, on_message=show)
+    except Exception as exc:  # surface explicite
+        _fail(1, error=str(exc))
+    _print_json(result.summary())
 
 
 def main() -> None:

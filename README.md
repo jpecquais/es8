@@ -68,7 +68,7 @@ uv sync
 
 ```
 src/es8ctl/
-  cli.py          # typer : devices · capture · inspect · diff · patches · system · transform · apply · verify · check · export-bel · import-bel
+  cli.py          # typer : devices · capture · inspect · diff · patches · system · transform · apply · verify · check · export-bel · import-bel · sniff
   capture.py      # écoute MIDI, enregistrement, sidecar JSON
   diff.py         # comparaison de dumps (système, patchs bit à bit)
   layout.py       # champs empaquetés au bit ↔ JSON (mécanique commune)
@@ -78,6 +78,7 @@ src/es8ctl/
   routing.py      # chaîne de loops ↔ notation écran (V8746(3//5)21)
   transform.py    # transformations en masse → changements JSON
   bel.py          # import / export .bel (éditeur officiel)
+  sniff.py        # relais enregistreur éditeur officiel ⇄ ES-8
   apply.py        # changements JSON → pages → trames (validation, sans MIDI)
   transfer.py     # envoi MIDI vers l'ES-8 (seul module émetteur)
   codec/
@@ -85,6 +86,7 @@ src/es8ctl/
     es8.py        # trames de bulk ES-8, découpage, pages (2 messages 8→7)
 docs/
   bulk-format.md  # notes de RE + protocole des dumps différentiels
+  sniff-editor.md # écouter l'éditeur officiel (mise en place Windows + Mac)
 tests/
 captures/         # dumps bruts de la session hardware (voir captures/README.md)
 ```
@@ -111,6 +113,12 @@ es8ctl apply var.json --base captures/<dump>.syx            # simulation
 
 `--patches 0-1..9-8` restreint `set` et `swap-loops` ; `variants` refuse
 d'écraser un patch non vierge sans `--overwrite`.
+
+## Écouter l'éditeur officiel
+
+`es8ctl sniff` relaie l'éditeur BOSS (Windows, via rtpMIDI) ⇄ l'ES-8 (WIDI)
+en journalisant chaque message — pour trouver la commande de lecture et
+l'édition en temps réel. Mise en place : `docs/sniff-editor.md`.
 
 ## Écrire vers l'ES-8
 
