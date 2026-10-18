@@ -5,13 +5,10 @@ et la séquence de travail.
 
 ## État actuel
 
-Étape 1 terminée : le bulk dump est capturé, encodé/décodé bit à bit, et
-**les patchs comme le bloc système sont décodés** (`es8ctl patches`,
-`es8ctl system`), grâce à la spec officielle Roland (firmware v1) recalée
-sur le firmware v2 — voir `docs/bulk-format.md`. Étape 2 en cours :
-`es8ctl apply` (simulation par défaut, `--write` pour envoyer) et
-`es8ctl verify` ; **première écriture réelle réussie** (une page, via
-Bluetooth MIDI). Les patchs sont numérotés comme sur l'ES-8 : 0-1 … 99-8.
+Étapes 1 et 2 terminées : dump décodé en entier (patchs et système),
+écriture vérifiée sur l'appareil. Étape 3 en cours : transformations en
+masse (`es8ctl transform`) — les trois cas d'usage cibles passent en une
+commande, testés sans matériel. Détails du format : `docs/bulk-format.md`.
 
 ## Installation
 
@@ -69,12 +66,15 @@ uv sync
 
 ```
 src/es8ctl/
-  cli.py          # typer : devices · capture · inspect · diff · patches · system · apply · verify
+  cli.py          # typer : devices · capture · inspect · diff · patches · system · transform · apply · verify
   capture.py      # écoute MIDI, enregistrement, sidecar JSON
   diff.py         # comparaison de dumps (système, patchs bit à bit)
   layout.py       # champs empaquetés au bit ↔ JSON (mécanique commune)
   patch.py        # carte complète des champs de patch (v2)
   system.py       # carte du bloc système (v2)
+  names.py        # noms symboliques (NUM_8, BPM, L6…)
+  routing.py      # chaîne de loops ↔ notation écran (V8746(3//5)21)
+  transform.py    # transformations en masse → changements JSON
   apply.py        # changements JSON → pages → trames (validation, sans MIDI)
   transfer.py     # envoi MIDI vers l'ES-8 (seul module émetteur)
   codec/
@@ -85,6 +85,29 @@ docs/
 tests/
 captures/         # dumps bruts de la session hardware (voir captures/README.md)
 ```
+
+## Transformations en masse
+
+`es8ctl transform` produit un JSON de changements, à passer à `es8ctl apply`
+(simulation, sauvegarde et vérification restent au même endroit). Index et
+valeurs symboliques acceptés (`NUM_8`, `BPM`, `L6`…). Chaîne de loops en
+notation écran : `"loop_chain": "V8746(3//5)21"` (`//` = parallèle).
+
+```sh
+# Footswitch 8 en tap tempo sur tous les patchs
+es8ctl transform set "ctl_func[NUM_8]=BPM" -b captures/<dump>.syx -o tap.json
+
+# Échanger les loops 6 et 7 partout (interrupteurs, carry-over, assigns, chaîne)
+es8ctl transform swap-loops 6 7 -b captures/<dump>.syx -o swap.json
+
+# 50 variantes du patch 0-8 aux routings différents, dans 10-1 … 16-2
+es8ctl transform variants 0-8 --into 10-1 -n 50 -b captures/<dump>.syx -o var.json
+
+es8ctl apply var.json --base captures/<dump>.syx            # simulation
+```
+
+`--patches 0-1..9-8` restreint `set` et `swap-loops` ; `variants` refuse
+d'écraser un patch non vierge sans `--overwrite`.
 
 ## Écrire vers l'ES-8
 

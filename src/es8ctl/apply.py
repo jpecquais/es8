@@ -10,7 +10,8 @@ Format des changements (forme des valeurs = celle de `es8ctl patches` /
 `es8ctl system`) :
 
     {
-      "patches": {"0-1": {"master_bpm": 107, "name": "MY PATCH        "}},
+      "patches": {"0-1": {"master_bpm": 107, "name": "MY PATCH        ",
+                          "loop_chain": "V8746(3//5)21"}},
       "system": {"others_lcd_contrast": 5}
     }
 
@@ -36,6 +37,7 @@ from .codec import (
     unpack_page,
 )
 from .patch import decode_patch, encode_patch
+from .routing import parse as parse_chain
 from .system import SYSTEM_PAGES, decode_system, encode_system
 
 # Spec Roland : au moins 50 ms entre deux messages. Marge de sécurité.
@@ -67,6 +69,22 @@ def _field_changes(target: str, before: dict, after: dict) -> list[dict]:
         for name in after
         if after[name] != before[name]
     ]
+
+
+def _with_positions(page: bytes, fields: dict) -> dict:
+    """Traduit `loop_chain` (notation de l'écran) en `loop_position`."""
+    if not isinstance(fields, dict):
+        raise CodecError("Changements d'un patch : objet {champ: valeur} attendu.")
+    if "loop_chain" not in fields:
+        return fields
+    if "loop_position" in fields:
+        raise CodecError("Fournir loop_chain ou loop_position, pas les deux.")
+    fields = dict(fields)
+    text = fields.pop("loop_chain")
+    if not isinstance(text, str):
+        raise CodecError("loop_chain : chaîne attendue (ex. « V8746(3//5)21 »).")
+    fields["loop_position"] = parse_chain(text, base=decode_patch(page)["loop_position"])
+    return fields
 
 
 def plan_changes(base_frames: list[bytes], changes: dict) -> Plan:
@@ -103,7 +121,7 @@ def plan_changes(base_frames: list[bytes], changes: dict) -> Plan:
             raise CodecError(f"Patch {label} absent ou incomplet dans le dump de base.")
         record = dump.patches[index]
         page = unpack_page(record)
-        edited = encode_patch(page, patch_changes[label])
+        edited = encode_patch(page, _with_positions(page, patch_changes[label]))
         diffs += _field_changes(patch_label(index), decode_patch(page), decode_patch(edited))
         if edited != page:
             frames += _page_frames(PATCH_FIRST_COUNTER + index * PATCH_FRAMES, pack_page(edited))

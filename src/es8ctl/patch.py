@@ -79,7 +79,8 @@ _LAYOUT: tuple[tuple, ...] = (
     ("assign_sw", 12, 1, 0, 1),
     ("assign_source", 12, 5, 0, 21),
     ("assign_mode", 12, 1, 0, 1),
-    ("assign_target", 12, 6, 0, 37),
+    # v1 : 0-37 ; v2 ajoute PMIDI1-8 (ordre de l'éditeur, cf. names.ASSIGN_TARGETS).
+    ("assign_target", 12, 6, 0, 42),
     ("assign_target_cc_ch", 12, 4, 0, 15),
     ("assign_target_cc_no", 12, 7, 0, 127),
     ("assign_target_min", 12, 9, 0, 511),

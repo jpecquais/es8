@@ -64,9 +64,20 @@ confiance par champ : `confirmed` / `spec` / `inferred`).
 
 Défaut usine : `BOSS ES-8       `, 120 BPM.
 
-`loop_position` : 0–9 apparaissent une fois chacun, 10–15 deux fois et
-s'intercalent entre les loops (TOC-FAT : `…6, 10, 5, 11, 3, 12…`) —
-probablement des marqueurs de branches série/parallèle, à confirmer.
+`loop_position` = **ordre de la chaîne** (confirmé sur l'écran de l'ES-8 :
+0-3 `87654321V`, 0-8 `V87465321`, 6-2 `V8746(3//5)21`) :
+
+- 0 = V, 1–8 = L1–L8 ;
+- 10 / 11 / 12 = début / séparateur / fin d'un parallèle ; 13 / 14 / 15 =
+  second jeu de marqueurs (affichage non observé) ; deux exemplaires de
+  chaque marqueur ;
+- 9 termine la chaîne ; la réserve de marqueurs inutilisés suit, dans un
+  ordre qui varie d'un patch à l'autre (conservé lors des modifications) ;
+- l'écran présente les deux branches d'un parallèle dans l'ordre inverse
+  de la liste (`10 5 11 3 12` → `(3//5)`) ; une branche peut être vide.
+
+Code : `src/es8ctl/routing.py` (notation écran ↔ liste, `loop_chain` dans
+`patches` et `apply`).
 
 ### Bloc système (8 pages)
 
@@ -115,8 +126,8 @@ systématique par re-dump.
 3. Comportement de l'ES-8 à la réception d'une seule page (écriture
    partielle) : à vérifier au premier essai d'écriture.
 4. Confirmer par dump les champs `inferred` (`mixer_*`, `midi_clock_out`,
-   `midi_transmit`, extension système v2) et le sens des marqueurs 10–15 de
-   `loop_position`.
+   `midi_transmit`, extension système v2) et l'affichage des parallèles du
+   second jeu (13–15).
 
 ## Protocole — dumps différentiels
 

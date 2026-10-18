@@ -1,4 +1,4 @@
-"""CLI es8ctl : devices · capture · inspect · diff · patches · system · apply · verify.
+"""CLI es8ctl : devices · capture · inspect · diff · patches · system · transform · apply · verify.
 
 Sortie JSON machine-first par défaut. Seule `apply --write` émet vers l'ES-8,
 après validation complète et sauvegarde horodatée du dump de base.
@@ -20,6 +20,8 @@ from .diff import diff_files, load_dump
 from .patch import FIRMWARE, SCHEMA_VERSION, decode_patch, out_of_range
 from .system import decode_system, system_out_of_range
 from .apply import DEFAULT_INTERVAL_S, plan_changes
+from . import transform as tf
+from .routing import render as render_chain
 from .codec import split_frames
 
 app = typer.Typer(
@@ -164,6 +166,10 @@ def patches(
         for i in wanted:
             fields = decode_patch(unpack_page(dump.patches[i]))
             entry = {"patch": patch_label(i), "index": i, **fields}
+            try:
+                entry["loop_chain"] = render_chain(fields["loop_position"])
+            except CodecError as exc:
+                entry["loop_chain_error"] = str(exc)
             warnings = out_of_range(fields)
             if warnings:
                 entry["warnings"] = warnings
@@ -225,6 +231,86 @@ def _backup(base: Path, backup_dir: Path) -> Path:
     with base.open("rb") as src, target.open("xb") as dst:  # « x » : échec si existe
         shutil.copyfileobj(src, dst)
     return target
+
+
+transform_app = typer.Typer(
+    help="Transformations en masse : produisent un JSON de changements pour `es8ctl apply`."
+)
+app.add_typer(transform_app, name="transform")
+
+
+def _emit_changes(changes: dict, out: Path | None, summary: dict) -> None:
+    """Changements sur stdout (ou --out), résumé lisible sur stderr."""
+    text = json.dumps(changes, indent=2, ensure_ascii=False)
+    if out is None:
+        typer.echo(text)
+    else:
+        out.write_text(text + "\n", encoding="utf-8")
+    typer.echo(json.dumps({**summary, "patches_changed": len(changes["patches"]),
+                           "out": str(out) if out else "stdout"}, ensure_ascii=False), err=True)
+
+
+def _load_base(base: Path):
+    try:
+        return load_dump(base)
+    except (CodecError, ValueError) as exc:
+        _fail(2, error=str(exc), base=str(base))
+
+
+@transform_app.command("set")
+def transform_set(
+    assignments: list[str] = typer.Argument(..., help="champ=valeur ou champ[index]=valeur (ex. ctl_func[NUM_8]=BPM)."),
+    base: Path = typer.Option(..., "--base", "-b", exists=True, readable=True, help="Dump de l'ES-8."),
+    patches: str = typer.Option("all", "--patches", help="Sélection : all, 0-1..9-8, 0-1,2-3."),
+    out: Path = typer.Option(None, "--out", "-o", help="Fichier de sortie (sinon stdout)."),
+) -> None:
+    """Affecte des valeurs à une sélection de patchs."""
+    dump = _load_base(base)
+    try:
+        changes = tf.op_set(dump, tf.select_patches(dump, patches), assignments)
+    except CodecError as exc:
+        _fail(2, error=str(exc))
+    _emit_changes(changes, out, {"op": "set", "assignments": assignments, "selection": patches})
+
+
+@transform_app.command("swap-loops")
+def transform_swap_loops(
+    loop_a: str = typer.Argument(..., help="Loop (1-8, L1…L8, LV)."),
+    loop_b: str = typer.Argument(..., help="Loop (1-8, L1…L8, LV)."),
+    base: Path = typer.Option(..., "--base", "-b", exists=True, readable=True, help="Dump de l'ES-8."),
+    patches: str = typer.Option("all", "--patches", help="Sélection : all, 0-1..9-8, 0-1,2-3."),
+    out: Path = typer.Option(None, "--out", "-o", help="Fichier de sortie (sinon stdout)."),
+) -> None:
+    """Échange deux loops partout (interrupteurs, carry-over, cibles d'assign, chaîne)."""
+    dump = _load_base(base)
+    try:
+        changes = tf.op_swap_loops(dump, tf.select_patches(dump, patches), loop_a, loop_b)
+    except CodecError as exc:
+        _fail(2, error=str(exc))
+    _emit_changes(changes, out, {
+        "op": "swap-loops", "loops": [loop_a, loop_b], "selection": patches,
+    })
+
+
+@transform_app.command("variants")
+def transform_variants(
+    source: str = typer.Argument(..., help="Patch source (ex. 0-8)."),
+    into: str = typer.Option(..., "--into", help="Premier patch cible (ex. 10-1) ; les suivants sont consécutifs."),
+    count: int = typer.Option(..., "--count", "-n", help="Nombre de variantes."),
+    base: Path = typer.Option(..., "--base", "-b", exists=True, readable=True, help="Dump de l'ES-8."),
+    seed: int = typer.Option(0, "--seed", help="Graine du tirage (résultat reproductible)."),
+    prefix: str = typer.Option(None, "--prefix", help="Début du nom des variantes (défaut : nom de la source)."),
+    overwrite: bool = typer.Option(False, "--overwrite", help="Autoriser l'écrasement de patchs non vierges."),
+    out: Path = typer.Option(None, "--out", "-o", help="Fichier de sortie (sinon stdout)."),
+) -> None:
+    """Copie un patch en N variantes aux ordres de loops tous différents."""
+    dump = _load_base(base)
+    try:
+        changes = tf.op_variants(dump, source, into, count, seed=seed, prefix=prefix, overwrite=overwrite)
+    except CodecError as exc:
+        _fail(2, error=str(exc))
+    _emit_changes(changes, out, {"op": "variants", "source": source, "into": into,
+                                 "count": count, "seed": seed})
 
 
 @app.command()
