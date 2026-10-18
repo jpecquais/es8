@@ -620,10 +620,23 @@ def patch_detail(label: str) -> str:
         if "loop_chain" in staged or "loop_position" in staged:
             original["loop_position"] = device["loop_position"]
             original["chain"] = render(device["loop_position"])
+    from .routing import mixers_used, problems
+
+    sys_fields = decode_system(_preview().system) if _preview().system is not None else None
+    stereo = (bool(sys_fields["preference_loop7_return_mode"]), bool(sys_fields["preference_loop8_return_mode"])) \
+        if sys_fields else (False, False)
+    system = None
+    if sys_fields:
+        system = {k: sys_fields[k] for k in ("ctl_sw", "ctl_func", "ctl_mod", "exp_sw", "exp_func")}
+        system["ext_ctl_types"] = [sys_fields[f"play_option_ext_ctl_type_ctl{n}"] for n in range(1, 7)]
+        system["stereo"] = stereo
     return json.dumps({
         "patch": label,
         "pending": staged,
         "original": original,
+        "mixers": mixers_used(fields["loop_position"], fields["carry_over_loop"], *stereo),
+        "routing_problems": problems(fields["loop_position"], fields["carry_over_loop"], *stereo),
+        "system": system,
         "name": fields["name"],
         "chain": render(fields["loop_position"]),
         "bpm": fields["master_bpm"],

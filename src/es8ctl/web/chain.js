@@ -1,13 +1,15 @@
 // Chaîne de loops en notation de l'écran (« V8746(3//5)21 ») ↔ arbre éditable.
-// La validation finale (loops présentes une fois, nombre de parallèles) est
-// faite par routing.parse côté Python au moment d'ajouter la modification.
+// La notation suit l'ordre de loop_position, qui va de la SORTIE vers
+// l'ENTRÉE ; l'interface la dessine à l'envers (entrée à gauche).
+// La validation finale (loops présentes une fois, mixers, blocs) est faite
+// côté Python au moment d'ajouter la modification.
 //
 // Arbre : liste d'éléments, chacun { loop: "V" | "1".."8" } ou
-// { par: "(" | "[", lanes: [liste, liste] } ; lanes[0] est la branche écrite
-// en premier à l'écran.
+// { par: "(" (MIX) | "[" (SEPARATE), lanes: [liste, liste] } ; une branche
+// vide est le signal sec.
 
 const CLOSE = { "(": ")", "[": "]" };
-const MAX_PER_SET = 2;
+const MAX_PER_KIND = 2;
 
 export function parseChain(text) {
   let i = 0;
@@ -42,15 +44,14 @@ export function serialize(items) {
 
 const clone = (items) => JSON.parse(JSON.stringify(items));
 
-/** Retire une loop où qu'elle soit ; dissout un parallèle dont une branche se vide. */
+/** Retire une loop où qu'elle soit ; un bloc qui n'a plus aucune loop disparaît. */
 function removeLoop(items, loop) {
   const out = [];
   for (const it of items) {
     if (it.loop === loop) continue;
     if (it.par) {
       const lanes = it.lanes.map((lane) => removeLoop(lane, loop));
-      if (!lanes[0].length || !lanes[1].length) out.push(...lanes[0], ...lanes[1]);
-      else out.push({ ...it, lanes });
+      if (lanes[0].length || lanes[1].length) out.push({ ...it, lanes });
     } else out.push(it);
   }
   return out;
@@ -66,11 +67,27 @@ function locate(items, loop) {
   return null;
 }
 
-/** Déplace `loop` : { before: loop }, { after: loop } ou { end: true } (fin de chaîne). */
+/**
+ * Déplace `loop`, en termes de liste : { before: loop }, { after: loop },
+ * { start: true } (côté sortie), { end: true } (côté entrée) ou
+ * { lane: [chemin, branche] } (dans une branche vide).
+ */
 export function moveLoop(text, loop, target) {
   if (target.before === loop || target.after === loop) return text;
-  const items = removeLoop(clone(parseChain(text)), loop);
-  if (target.end) {
+  let items = clone(parseChain(text));
+  if (target.lane) {
+    const [path, k, j] = target.lane;
+    const lane = listAt(items, path)[k].lanes[j];
+    if (lane.length) return text;
+    lane.push({ loop: "__moving__" });
+  }
+  items = removeLoop(items, loop);
+  if (target.lane) {
+    const hit = locate(items, "__moving__");
+    hit.list[hit.index] = { loop };
+  } else if (target.start) {
+    items.unshift({ loop });
+  } else if (target.end) {
     items.push({ loop });
   } else {
     const hit = locate(items, target.before || target.after);
@@ -80,7 +97,7 @@ export function moveLoop(text, loop, target) {
   return serialize(items);
 }
 
-/** Liste désignée par un chemin : [] = chaîne principale, [i, lane] = branche d'un parallèle, etc. */
+/** Liste désignée par un chemin : [] = chaîne principale, [i, branche] = branche d'un bloc, etc. */
 function listAt(items, path) {
   let list = items;
   for (let k = 0; k < path.length; k += 2) list = list[path[k]].lanes[path[k + 1]];
@@ -90,30 +107,32 @@ function listAt(items, path) {
 const countPar = (items, kind) => items.reduce((n, it) =>
   n + (it.par ? (it.par === kind ? 1 : 0) + countPar(it.lanes[0], kind) + countPar(it.lanes[1], kind) : 0), 0);
 
-/** Jeu de marqueurs libre pour un nouveau parallèle, ou null (quatre au plus). */
-export function freeMarker(text) {
-  const items = parseChain(text);
-  if (countPar(items, "(") < MAX_PER_SET) return "(";
-  if (countPar(items, "[") < MAX_PER_SET) return "[";
-  return null;
-}
+/** Encore un bloc MIX possible dans les données ? (deux au plus) */
+export const canMix = (text) => countPar(parseChain(text), "(") < MAX_PER_KIND;
 
-/** Met en parallèle deux éléments voisins d'une même liste (index i et i + 1). */
-export function pairUp(text, path, index) {
-  const marker = freeMarker(text);
-  if (!marker) return text;
+/** Met en MIX deux éléments voisins de la chaîne principale (index i et i + 1). */
+export function pairUp(text, index) {
+  if (!canMix(text)) return text;
   const items = clone(parseChain(text));
-  const list = listAt(items, path);
-  const [a, b] = list.splice(index, 2);
-  list.splice(index, 0, { par: marker, lanes: [[a], [b]] });
+  const [a, b] = items.splice(index, 2);
+  items.splice(index, 0, { par: "(", lanes: [[a], [b]] });
   return serialize(items);
 }
 
-/** Remplace un parallèle par ses deux branches à la suite. */
-export function dissolve(text, path, index) {
+/** Met une loop de la chaîne principale en MIX avec le signal sec. */
+export function mixWithDry(text, loop) {
+  if (!canMix(text)) return text;
   const items = clone(parseChain(text));
-  const list = listAt(items, path);
-  const [it] = list.splice(index, 1);
-  list.splice(index, 0, ...it.lanes[0], ...it.lanes[1]);
+  const i = items.findIndex((it) => it.loop === loop);
+  if (i < 0) return text;
+  items.splice(i, 1, { par: "(", lanes: [[{ loop }], []] });
+  return serialize(items);
+}
+
+/** Remplace un bloc de la chaîne principale par ses deux branches à la suite. */
+export function dissolve(text, index) {
+  const items = clone(parseChain(text));
+  const [it] = items.splice(index, 1);
+  items.splice(index, 0, ...it.lanes[0], ...it.lanes[1]);
   return serialize(items);
 }

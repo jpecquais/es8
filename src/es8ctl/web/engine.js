@@ -1,6 +1,7 @@
 // Moteur de l'interface : Pyodide (bibliothèque es8ctl), Web MIDI, stockage.
 // Aucune logique ES-8 ici : lecture, décodage, validation et écriture sont
 // faits par le code Python du CLI, exécuté dans le navigateur.
+// Textes affichés : en anglais.
 
 const PYODIDE_URL = "https://cdn.jsdelivr.net/pyodide/v0.27.7/full/";
 const LIB_DIR = "/home/pyodide/lib";
@@ -18,6 +19,7 @@ export const store = {
     bootError: null,
     midi: "pending", // pending | unsupported | denied | ok
     outputs: [], inputs: [], out: "", in: "",
+    synced: false, // système et noms lus sur l'appareil pendant cette session
     busy: null, // { label, n, total } pendant un échange avec l'appareil
     toast: null, // { text, kind }
     names: null,
@@ -51,7 +53,7 @@ export function mutate(fn, ...args) {
   const result = call(fn, ...args);
   if (result && result.error) { toast(result.error, "error"); return false; }
   refresh();
-  return true;
+  return result || true;
 }
 
 /** Relit l'état affiché (grille, résumé des modifications) depuis le pont. */
@@ -59,7 +61,7 @@ export function refresh() {
   if (!bridge) return;
   const grid = call("bank_grid");
   store.set({
-    grid: grid.cells.some((c) => !c.missing) ? grid : null,
+    grid: grid.cells.some((c) => !c.missing || c.name !== undefined) ? grid : null,
     summary: call("pending_summary"),
   });
 }
@@ -93,6 +95,9 @@ async function setupMidi() {
   midiAccess.onstatechange = listPorts;
   store.set({ midi: "ok" });
   listPorts();
+  // Ports déjà utilisés avec succès : on se resynchronise tout seul (≈ 10 s).
+  const prefs = loadPrefs();
+  if (prefs.syncedOut && prefs.syncedOut === portName(store.state.out)) sync();
 }
 
 function listPorts() {
@@ -114,9 +119,8 @@ function listPorts() {
 }
 
 export function choosePorts(out, inp) {
-  store.set({ out, in: inp });
-  const name = (list, id) => (list.find((p) => p.id === id) || {}).name;
-  savePrefs({ out: name(store.state.outputs, out), in: name(store.state.inputs, inp) });
+  store.set({ out, in: inp, synced: false });
+  savePrefs({ out: portName(out), in: portName(inp) });
   connectPorts();
 }
 
@@ -144,7 +148,7 @@ async function withDevice(label, total, job) {
   try {
     return await job((n, t, phase) => store.set({ busy: { label: phase || label, n, total: t } }));
   } catch (err) {
-    toast(`Erreur de communication : ${err}`, "error", 0);
+    toast(`Communication error: ${err}`, "error", 0);
     return null;
   } finally {
     store.set({ busy: null });
@@ -152,64 +156,105 @@ async function withDevice(label, total, job) {
   }
 }
 
+/** Connexion : réglages système et 800 noms (≈ 10 s), comme l'éditeur officiel. */
+export async function sync() {
+  const result = await withDevice("Reading names", 816, async (progress) => {
+    const sys = JSON.parse(await bridge.read_some(JSON.stringify(["system"]), (n) => progress(n, 816, "Reading system")));
+    const names = JSON.parse(await bridge.read_names((n) => progress(16 + n, 816, "Reading names")));
+    return { sys, names };
+  });
+  if (!result) return false;
+  if (result.names.names < 800 || result.sys.missing_pages.length) {
+    toast("The ES-8 did not answer. Check the MIDI cables or WIDI pairing, the ports, and that the ES-8 is on its play screen.", "error", 0);
+    return false;
+  }
+  store.set({ synced: true, fileName: null });
+  savePrefs({ syncedOut: portName(store.state.out) });
+  saveCache();
+  return true;
+}
+
 export async function readDevice() {
-  const result = await withDevice("Lecture de l'appareil", 1616, async (progress) =>
+  const result = await withDevice("Reading the whole ES-8", 1616, async (progress) =>
     JSON.parse(await bridge.read_device((n, t) => progress(n, t))));
   if (!result) return;
-  store.set({ fileName: null });
-  if (result.missing_pages.length) toast(`Lecture incomplète : ${result.missing_pages.length} page(s) manquante(s).`, "warn", 0);
-  else toast("Appareil lu.", "ok");
+  store.set({ fileName: null, synced: true });
+  if (result.missing_pages.length) toast(`Read incomplete: ${result.missing_pages.length} page(s) missing.`, "warn", 0);
+  else toast("ES-8 read.", "ok");
   saveCache();
 }
 
 /** Relit des patchs (« 3-1 ») et/ou « system ». */
-export async function readSome(labels, what) {
-  const result = await withDevice(`Relecture ${what}`, labels.length * 2, async (progress) =>
+export async function readSome(labels, what, quiet = false) {
+  const result = await withDevice(`Reading ${what}`, labels.length * 2, async (progress) =>
     JSON.parse(await bridge.read_some(JSON.stringify(labels), (n, t) => progress(n, t))));
-  if (!result) return;
-  if (result.missing_pages.length) toast(`Relecture ${what} incomplète.`, "warn");
-  else toast(`Relecture ${what} terminée.`, "ok", 2500);
+  if (!result) return false;
+  if (result.missing_pages.length) toast(`Could not read all of ${what}.`, "warn");
+  else if (!quiet) toast(`Read ${what}.`, "ok", 2500);
   saveCache();
+  return !result.missing_pages.length;
 }
 
-const PHASES = { refresh: "Relecture préalable", send: "Envoi", read: "Vérification", resend: "Renvoi" };
+/** Rappelle un patch sur l'ES-8. */
+export async function play(label) {
+  if (!hasDevice() || store.state.busy) return;
+  await bridge.select_on_device(label);
+  refresh();
+}
+
+const PHASES = { refresh: "Re-reading targets", send: "Sending", read: "Verifying", resend: "Resending" };
 
 export async function writePending() {
   storeBackup(currentSyx());
-  const result = await withDevice("Écriture", 1, async (progress) =>
+  const result = await withDevice("Writing", 1, async (progress) =>
     JSON.parse(await bridge.write_pending((phase, n, t) => progress(n, t, PHASES[phase] || phase))));
   if (!result) return;
   const drift = result.changed_on_device && result.changed_on_device.length
-    ? ` Modifié au panneau depuis la lecture (tes changements y ont été appliqués) : ${result.changed_on_device.join(", ")}.` : "";
+    ? ` Changed on the ES-8 since the last read (your edits were applied on top): ${result.changed_on_device.join(", ")}.` : "";
   if (result.error) toast(result.error, "error", 0);
-  else if (result.confirmed) toast((result.note || `Écriture confirmée par relecture (${result.frames / 2} page(s)).`) + drift, "ok", 8000);
-  else toast(`Non confirmé après renvois : ${result.not_confirmed.join(", ")}. Ces patchs restent en attente.${drift}`, "warn", 0);
+  else if (result.confirmed) toast((result.note || `Written and verified (${result.frames / 2} page(s)).`) + drift, "ok", 8000);
+  else toast(`Not confirmed after resending: ${result.not_confirmed.join(", ")}. These patches stay pending.${drift}`, "warn", 0);
   saveCache();
 }
 
 // ---------------------------------------------------------------- fichiers
 
-export async function openSyx(file) {
+const kindOf = (file) => (/\.bel$/i.test(file.name) ? "bel" : "syx");
+
+/** Ouvre un fichier pour le consulter (remplace l'état affiché, sans rien écrire). */
+export async function openFile(file) {
   try {
+    if (kindOf(file) === "bel") { toast("A .bel file can only be imported into the ES-8 state: use Import.", "warn"); return; }
     const result = call("load_syx", new Uint8Array(await file.arrayBuffer()));
-    store.set({ fileName: file.name, grid: null });
+    store.set({ fileName: file.name, grid: null, synced: false });
     refresh();
-    toast(`${file.name} : ${result.patches} patchs.`, "ok");
+    toast(`${file.name}: ${result.patches} patches. Viewing the file, not the ES-8.`, "ok");
   } catch (err) {
-    toast(`Fichier illisible : ${err}`, "error");
+    toast(`Cannot read this file: ${err}`, "error");
   }
 }
 
-export function currentSyx() {
-  const proxy = bridge.syx_bytes();
+/** Importe un .syx ou .bel : ses différences avec l'ES-8 deviennent des modifications en attente. */
+export async function importFile(file) {
+  const result = mutate("import_file", new Uint8Array(await file.arrayBuffer()), kindOf(file));
+  if (!result) return;
+  const skipped = result.warnings && result.warnings.length ? ` ${result.warnings.length} patch(es) skipped (not read from the ES-8 yet).` : "";
+  toast(result.imported ? `${file.name}: ${result.imported} patch(es) differ and were added to the changes.${skipped}`
+    : `${file.name}: nothing differs from the ES-8.${skipped}`, result.imported ? "ok" : "", 8000);
+}
+
+export function currentSyx(labels) {
+  const proxy = bridge.syx_bytes(labels ? JSON.stringify(labels) : null);
   const data = proxy.toJs();
   proxy.destroy();
   return data;
 }
 
-export function download(data, name) {
+export const currentBel = () => bridge.bel_text();
+
+export function download(data, name, type = "application/octet-stream") {
   const link = document.createElement("a");
-  link.href = URL.createObjectURL(new Blob([data], { type: "application/octet-stream" }));
+  link.href = URL.createObjectURL(new Blob([data], { type }));
   link.download = name;
   link.click();
   setTimeout(() => URL.revokeObjectURL(link.href), 1000);
