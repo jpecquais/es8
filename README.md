@@ -5,10 +5,11 @@ et la séquence de travail.
 
 ## État actuel
 
-Format entièrement décodé (patchs et système) — carte identique à la base
-de paramètres de l'éditeur BOSS officiel. Lecture à distance (`es8ctl read`,
-sans dump au panneau), écriture vérifiée sur l'appareil, transformations en
-masse, import / export `.bel`. Détails : `docs/bulk-format.md`.
+Format entièrement décodé (identique à la base de l'éditeur BOSS officiel).
+Lecture à distance, écriture vérifiée (`apply --confirm`), transformations
+en masse vérifiées sur l'appareil, commandes directes (`es8ctl patch`),
+import / export `.bel`. Reste : la GUI (étape 5). Détails :
+`docs/bulk-format.md`, `PLAN.md`.
 
 ## Installation
 
@@ -78,7 +79,7 @@ panneau) reste disponible.
 
 ```
 src/es8ctl/
-  cli.py          # typer : devices · capture · inspect · diff · patches · system · transform · apply · verify · check · export-bel · import-bel · sniff · read
+  cli.py          # typer : devices · capture · inspect · diff · patches · system · transform · apply · verify · check · export-bel · import-bel · sniff · read · patch
   capture.py      # écoute MIDI, enregistrement, sidecar JSON
   diff.py         # comparaison de dumps (système, patchs bit à bit)
   layout.py       # champs empaquetés au bit ↔ JSON (mécanique commune)
@@ -90,6 +91,7 @@ src/es8ctl/
   bel.py          # import / export .bel (éditeur officiel)
   sniff.py        # relais enregistreur éditeur officiel ⇄ ES-8
   request.py      # lecture à distance (RQ1, mode éditeur)
+  live.py         # commandes directes (sélection, renommage, copie, échange, init.)
   apply.py        # changements JSON → pages → trames (validation, sans MIDI)
   transfer.py     # envoi MIDI vers l'ES-8 (seul module émetteur)
   codec/
@@ -101,6 +103,19 @@ docs/
   agent-contract.md # piloter l'ES-8 depuis un agent / script
 tests/
 captures/         # dumps bruts de la session hardware (voir captures/README.md)
+```
+
+## Commandes directes
+
+Protocole de l'éditeur officiel : chaque action est vérifiée par relecture.
+Simulation par défaut ; `--write` sauvegarde les patchs touchés puis exécute.
+
+```sh
+es8ctl patch select 6-2 -p "WIDI Jack Bluetooth"                  # afficher un patch
+es8ctl patch rename 0-8 "MON PATCH" --write -p "WIDI Jack Bluetooth"
+es8ctl patch copy 0-8 99-2 --write -p "WIDI Jack Bluetooth"       # 99-2 écrasé
+es8ctl patch exchange 0-1 0-2 --write -p "WIDI Jack Bluetooth"
+es8ctl patch init 99-2 --write -p "WIDI Jack Bluetooth"           # usine, nom vide
 ```
 
 ## Transformations en masse

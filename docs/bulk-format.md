@@ -196,9 +196,9 @@ systématique par re-dump.
 
 1. ~~Transformations en masse~~ : faites et vérifiées.
 2. Tester un rythme d'écriture plus rapide (`--page-gap 0.2`) avec `--confirm`.
-3. Édition en temps réel : les commandes `7F xx` de l'éditeur (renommer,
-   copier, échanger, changer de patch) sont connues ; aucune adresse de
-   paramètre individuel n'existe — l'éditeur réécrit des pages entières.
+3. ~~Commandes directes~~ : `es8ctl patch` (sélection, renommage, copie,
+   échange, initialisation), toutes vérifiées sur l'appareil. Un patch
+   initialisé = le patch d'usine avec un nom de 16 espaces.
 
 ## Questions ouvertes
 

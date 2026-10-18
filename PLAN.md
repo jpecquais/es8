@@ -12,7 +12,7 @@ apportées par la recherche initiale, et la séquence de travail.
 | 1 — Noyau offline | ✅ | Format complet décodé, identique à la base de paramètres de l'éditeur officiel ; round-trip bit à bit ; schéma JSON aligné `.bel` |
 | 2 — CLI v1 | ✅ | `capture`, `diff`, `patches`, `system`, `apply` (dry-run / `--write`, backup), `verify`, `check` ; écriture vérifiée sur l'ES-8 |
 | 3 — Transformations en masse | ✅ | Les 3 cas d'usage écrits et vérifiés sur l'appareil : 50 variantes, tap tempo sur 800 patchs, échange 6 ↔ 7 sur 800 patchs (`apply --confirm`) |
-| 4 — Temps réel | 🟡 | Protocole de l'éditeur officiel lu dans son code : lecture à distance (`es8ctl read`) opérationnelle ; commandes `7F xx` (renommer, copier, échanger…) connues, à exposer |
+| 4 — Temps réel | ✅ | Protocole de l'éditeur officiel : lecture à distance (`es8ctl read`), commandes directes vérifiées sur l'appareil (`es8ctl patch select/rename/copy/exchange/init`). L'éditeur n'a pas d'adresse par paramètre : l'édition fine passe par l'écriture de pages (`apply`) |
 | 5 — GUI / contrat agent | 🟡 | Contrat agent rédigé (`docs/agent-contract.md`) ; GUI non commencée |
 
 Hors plan : import / export `.bel` (`es8ctl import-bel` / `export-bel`).

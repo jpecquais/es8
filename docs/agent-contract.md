@@ -50,6 +50,7 @@ es8ctl check changes.json captures/<nouvelle lecture>.syx  # 0 = tout est appliq
 | `diff` | comparer deux dumps | → plages de bits par patch |
 | `transform set` / `swap-loops` / `variants` | préparer des changements | `.syx` → changements JSON |
 | `import-bel` / `export-bel` | interop. éditeur officiel | `.bel` ⇄ changements / `.syx` → `.bel` |
+| `patch select` / `rename` / `copy` / `exchange` / `init` | action directe | simulation ; `--write` : sauvegarde, envoi, relecture → `confirmed` |
 | `apply` | écrire | changements + `.syx` de base → plan ; `--write` envoie |
 | `verify` | dump attendu = dump réel ? | ignore le patch sélectionné (`current_num`) |
 | `check` | changements présents dans un dump ? | par patch : `applied`, `mismatches` |

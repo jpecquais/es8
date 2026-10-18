@@ -1,4 +1,4 @@
-"""CLI es8ctl : devices · capture · inspect · diff · patches · system · transform · apply · verify · check · export-bel · import-bel · sniff · read.
+"""CLI es8ctl : devices · capture · inspect · diff · patches · system · transform · apply · verify · check · export-bel · import-bel · sniff · read · patch (select, rename, copy, exchange, init).
 
 Sortie JSON machine-first par défaut. Seule `apply --write` émet vers l'ES-8,
 après validation complète et sauvegarde horodatée du dump de base.
@@ -630,6 +630,135 @@ def read(
                  "missing_pages": labels})
     if missing:
         raise typer.Exit(code=1)
+
+
+patch_app = typer.Typer(
+    help="Commandes directes de l'ES-8 (protocole de l'éditeur officiel) : vérifiées par relecture."
+)
+app.add_typer(patch_app, name="patch")
+
+
+def _run_live(op, port: str, port_in: str | None, write: bool, backup_dir: Path) -> None:
+    """Simulation, ou : sauvegarde des patchs touchés, envoi, relecture et vérification."""
+    import time
+
+    import mido
+
+    from .codec import patch_label as label_of
+    from .codec import split_dump
+    from .live import expected_after
+    from .patch import decode_patch
+    from .request import frames_to_syx, patch_page, read_pages
+    from .system import decode_system
+    from .transfer import list_output_ports, resolve_port
+
+    report = op.describe()
+    if not write and op.action != "select":
+        _print_json({**report, "mode": "dry-run", "note": "Ajouter --write --port <port> pour exécuter.",
+                     "precondition": DEVICE_PRECONDITION})
+        return
+    out_port = resolve_port(port, list_output_ports()) if port else None
+    in_port = resolve_port(port_in or port, list_ports()) if port else None
+    if out_port is None or in_port is None:
+        _fail(2, **report, error="Port introuvable (--port, --port-in).")
+
+    def read_touched(indices, system=False):
+        pages = (list(range(8)) if system else []) + [patch_page(i) for i in indices]
+        frames, missing = read_pages(out_port, in_port, pages)
+        if missing:
+            _fail(1, **report, error="Relecture incomplète.", missing_pages=missing)
+        return frames, split_dump(list(frames.values()))
+
+    before = {}
+    if op.touched:
+        frames, dump = read_touched(op.touched)
+        before = {i: dump.patches[i] for i in op.touched}
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
+        backup = backup_dir / f"backup_{stamp}_patch_{op.action}.syx"
+        with backup.open("xb") as f:
+            f.write(frames_to_syx(frames))
+        report["backup"] = str(backup)
+    with mido.open_output(out_port) as out:
+        for message in op.messages:
+            out.send(mido.Message.from_bytes(message))
+            time.sleep(DEFAULT_INTERVAL_S)
+    time.sleep(1.0)  # laisser l'ES-8 enregistrer
+
+    if op.action == "select":
+        _, dump = read_touched([], system=True)
+        current = decode_system(dump.system)["current_num"]
+        ok = label_of(current) == op.detail["patch"]
+        report["current"] = label_of(current)
+    else:
+        _, dump = read_touched(op.touched)
+        after = {i: dump.patches[i] for i in op.touched}
+        names = {label_of(i): decode_patch(unpack_page(r))["name"] for i, r in after.items()}
+        report["names_after"] = names
+        expected = expected_after(op, before)
+        if expected is not None:
+            ok = after == expected
+        elif op.action == "rename":
+            ok = names[op.detail["patch"]] == op.detail["name"]
+        else:  # initialize : patch d'usine au nom vide
+            ok = names[op.detail["patch"]] == " " * 16
+    _print_json({**report, "mode": "write", "confirmed": ok})
+    if not ok:
+        raise typer.Exit(code=1)
+
+
+_PORT = typer.Option(None, "--port", "-p", help="Port vers l'ES-8 (ex. WIDI Jack Bluetooth).")
+_PORT_IN = typer.Option(None, "--port-in", help="Port d'écoute, s'il diffère de --port.")
+_WRITE = typer.Option(False, "--write", help="Exécuter (sinon simulation).")
+_BACKUPS = typer.Option(Path("backups"), "--backup-dir", help="Répertoire des sauvegardes.")
+
+
+def _live(build, *args, port, port_in, write, backup_dir) -> None:
+    from . import live
+
+    try:
+        op = getattr(live, build)(*args)
+    except CodecError as exc:
+        _fail(2, error=str(exc))
+    _run_live(op, port, port_in, write, backup_dir)
+
+
+@patch_app.command("select")
+def patch_select(patch: str = typer.Argument(..., help="Patch à afficher (ex. 6-2)."),
+                 port: str = _PORT, port_in: str = _PORT_IN) -> None:
+    """Fait passer l'ES-8 sur un patch (aucune donnée modifiée)."""
+    _live("select", patch, port=port, port_in=port_in, write=True, backup_dir=Path("backups"))
+
+
+@patch_app.command("rename")
+def patch_rename(patch: str = typer.Argument(...), name: str = typer.Argument(..., help="16 caractères au plus."),
+                 port: str = _PORT, port_in: str = _PORT_IN, write: bool = _WRITE,
+                 backup_dir: Path = _BACKUPS) -> None:
+    """Renomme un patch."""
+    _live("rename", patch, name, port=port, port_in=port_in, write=write, backup_dir=backup_dir)
+
+
+@patch_app.command("copy")
+def patch_copy(source: str = typer.Argument(...), target: str = typer.Argument(...),
+               port: str = _PORT, port_in: str = _PORT_IN, write: bool = _WRITE,
+               backup_dir: Path = _BACKUPS) -> None:
+    """Copie un patch sur un autre (la cible est écrasée)."""
+    _live("copy", source, target, port=port, port_in=port_in, write=write, backup_dir=backup_dir)
+
+
+@patch_app.command("exchange")
+def patch_exchange(first: str = typer.Argument(...), second: str = typer.Argument(...),
+                   port: str = _PORT, port_in: str = _PORT_IN, write: bool = _WRITE,
+                   backup_dir: Path = _BACKUPS) -> None:
+    """Échange deux patchs."""
+    _live("exchange", first, second, port=port, port_in=port_in, write=write, backup_dir=backup_dir)
+
+
+@patch_app.command("init")
+def patch_init(patch: str = typer.Argument(...), port: str = _PORT, port_in: str = _PORT_IN,
+               write: bool = _WRITE, backup_dir: Path = _BACKUPS) -> None:
+    """Réinitialise un patch (réglages d'usine, nom vide)."""
+    _live("initialize", patch, port=port, port_in=port_in, write=write, backup_dir=backup_dir)
 
 
 def main() -> None:
