@@ -569,6 +569,33 @@ def sniff(
 
 
 @app.command()
+def names(
+    port: str = typer.Option(..., "--port", "-p", help="Port de sortie vers l'ES-8 (ex. WIDI)."),
+    port_in: str = typer.Option(None, "--port-in", help="Port d'écoute de l'ES-8, s'il diffère de --port."),
+) -> None:
+    """Lit les 800 noms de patchs (≈ 7 s), sans lire les patchs eux-mêmes.
+
+    Sortie : {"0-1": "NOM", …}. Code 0 si les 800 noms sont lus, 1 sinon, 2 erreur.
+    """
+    from .codec import PATCH_COUNT
+    from .request import read_names
+    from .transfer import list_output_ports, resolve_port
+
+    outputs, inputs = list_output_ports(), list_ports()
+    out_port = resolve_port(port, outputs)
+    in_port = resolve_port(port_in or port, inputs)
+    if out_port is None or in_port is None:
+        _fail(2, error="Port introuvable.", inputs=inputs, outputs=outputs)
+    try:
+        found = read_names(out_port, in_port)
+    except Exception as exc:  # surface explicite
+        _fail(2, error=str(exc))
+    _print_json({patch_label(i): found[i].rstrip() for i in sorted(found)})
+    if len(found) < PATCH_COUNT:
+        raise typer.Exit(code=1)
+
+
+@app.command()
 def read(
     port: str = typer.Option(..., "--port", "-p", help="Port de sortie vers l'ES-8 (ex. WIDI)."),
     port_in: str = typer.Option(None, "--port-in", help="Port d'écoute de l'ES-8, s'il diffère de --port."),

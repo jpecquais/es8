@@ -210,3 +210,42 @@ def test_labels_and_system_detail():
     assert sys_detail["original"] == {"midi_setting_rx_ch": rx}
     webapp.revert("system", "midi_setting_rx_ch")
     assert json.loads(webapp.pending_summary())["frames"] == 0
+
+
+def _namelist_messages(names: list[str]) -> list[bytes]:
+    from es8ctl.codec.roland import checksum
+
+    out = []
+    for m in range(100):
+        body = [0x20 + (m >> 7), m & 0x7F, *b"".join(n.ljust(16).encode() for n in names[m * 8 : m * 8 + 8])]
+        out.append(bytes([0xF0, 0x41, 0x00, 0x00, 0x00, 0x00, 0x14, 0x12, *body, checksum(body), 0xF7]))
+    return out
+
+
+def test_read_names_fills_the_list_before_patches():
+    from es8ctl.request import parse_namelist_message
+
+    names = [f"SONG {i}" for i in range(800)]
+    msgs = _namelist_messages(names)
+    assert parse_namelist_message(msgs[2])[17] == "SONG 17".ljust(16)
+    loop = asyncio.new_event_loop()
+    dropped = {5}
+
+    def es8(raw):
+        if raw[7] != 0x11:
+            return
+        first = (raw[8] << 7 | raw[9]) - 4096
+        for m in range(first, first + (raw[10] << 7 | raw[11]) + 1):
+            if m in dropped:
+                dropped.discard(m)  # perdu une fois, redemandé
+                continue
+            loop.call_soon(webapp.push, msgs[m])
+
+    webapp.state.update(frames={}, dump=None, source=None, fresh=set(), names={})
+    webapp.discard()
+    webapp.set_sender(lambda data: es8(bytes(data)))
+    webapp.transport.queue = asyncio.Queue()
+    assert json.loads(loop.run_until_complete(webapp.read_names(idle_s=0.05)))["names"] == 800
+    loop.close()
+    cells = json.loads(webapp.bank_grid())["cells"]
+    assert cells[17] == {"patch": "2-2", "missing": True, "name": "SONG 17", "unnamed": False}

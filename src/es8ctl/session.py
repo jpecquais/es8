@@ -22,11 +22,15 @@ from .request import (
     DEFAULT_CHUNK_PAGES,
     DEFAULT_IDLE_S,
     DEFAULT_RETRIES,
+    NAMELIST_FIRST_ID,
+    NAMELIST_MESSAGES,
+    NAMES_PER_MESSAGE,
     SYSTEM_LAST_ID,
     SYSTEM_REQUEST,
     _chunks,
     editor_mode_message,
     page_ids,
+    parse_namelist_message,
     request_message,
 )
 
@@ -102,6 +106,45 @@ async def read_pages_async(
     finally:
         transport.send(editor_mode_message(False))
     return frames, missing_pages()
+
+
+async def read_names_async(
+    transport: Transport,
+    idle_s: float = DEFAULT_IDLE_S,
+    retries: int = DEFAULT_RETRIES,
+    on_progress: Callable[[int, int], None] | None = None,
+    sleep: Sleep = asyncio.sleep,
+) -> dict[int, str]:
+    """Lit les 800 noms (liste des noms, 100 messages) ; les messages perdus sont redemandés."""
+    names: dict[int, str] = {}
+    total = NAMELIST_MESSAGES * NAMES_PER_MESSAGE
+
+    async def collect(wanted: set[int]) -> None:
+        while wanted - names.keys():
+            raw = await transport.receive(idle_s)
+            if raw is None:
+                return
+            got = parse_namelist_message(raw)
+            if got:
+                names.update(got)
+                if on_progress is not None:
+                    on_progress(len(names), total)
+
+    transport.send(editor_mode_message(True))
+    await sleep(0.3)
+    try:
+        missing = [(0, NAMELIST_MESSAGES - 1)]
+        for _ in range(retries + 1):
+            for first, last in missing:
+                transport.send(request_message(NAMELIST_FIRST_ID + first, NAMELIST_FIRST_ID + last))
+                await collect(set(range(first * NAMES_PER_MESSAGE, (last + 1) * NAMES_PER_MESSAGE)))
+            gaps = sorted({n // NAMES_PER_MESSAGE for n in range(total)} - {n // NAMES_PER_MESSAGE for n in names})
+            missing = [(m, m) for m in gaps]
+            if not missing:
+                break
+    finally:
+        transport.send(editor_mode_message(False))
+    return names
 
 
 async def send_frames_async(

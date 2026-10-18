@@ -61,7 +61,9 @@ transport = WebMidiTransport()
 # frames : trames connues par ID ; fresh : IDs lus sur l'appareil pendant cette
 # session ; source : « device », « cache » (dernière lecture gardée par le
 # navigateur) ou « file » ; cached_at : date de cette lecture gardée.
-state: dict = {"frames": {}, "dump": None, "source": None, "fresh": set(), "cached_at": None}
+# names : noms lus par la liste des noms (patch → nom), plus récents que les
+# pages quand ils en diffèrent.
+state: dict = {"frames": {}, "dump": None, "source": None, "fresh": set(), "cached_at": None, "names": {}}
 pending: dict = {"patches": {}, "system": {}}
 _preview_cache: dict = {}
 
@@ -78,7 +80,7 @@ def push(data) -> None:
 
 def _set_frames(frames: dict[int, bytes], source: str) -> None:
     state["frames"] = frames
-    state["dump"] = split_dump(list(frames.values()))
+    state["dump"] = split_dump(list(frames.values())) if frames else None
     state["source"] = source
     _preview_cache.clear()
 
@@ -128,6 +130,21 @@ async def read_some(labels_json: str, on_progress=None, idle_s: float = DEFAULT_
     return json.dumps({"frames": len(frames), "missing_pages": missing})
 
 
+async def read_names(on_progress=None, idle_s: float = DEFAULT_IDLE_S) -> str:
+    """Lit les 800 noms (≈ 7 s) : la liste s'affiche avant de lire les patchs eux-mêmes."""
+    from .session import read_names_async
+
+    while not transport.queue.empty():
+        transport.queue.get_nowait()
+    names = await read_names_async(
+        transport, idle_s=idle_s, on_progress=(lambda n, t: on_progress(n, t)) if on_progress else None,
+    )
+    state["names"] = names
+    if state["source"] is None:
+        state["source"] = "device"
+    return json.dumps({"names": len(names)})
+
+
 def load_cached(data, cached_at: str) -> str:
     """Dernière lecture gardée par le navigateur : affichée, mais marquée « ancienne »."""
     result = load_syx(data)
@@ -141,7 +158,7 @@ def load_syx(data) -> str:
 
     frames = {parse_es8_bulk_frame(f).counter: f for f in split_frames(raw)}
     _set_frames(frames, "file")
-    state["fresh"], state["cached_at"] = set(), None
+    state["fresh"], state["cached_at"], state["names"] = set(), None, {}
     return json.dumps({"frames": len(frames), "patches": len(state["dump"].patches)})
 
 
@@ -445,19 +462,26 @@ def bank_grid() -> str:
     """800 cellules : nom, chaîne, BPM, loops actives."""
     dump = _preview()
     cells = []
+    names = state["names"]
     for index in range(PATCH_COUNT):
         record = dump.patches.get(index) if dump else None
         if record is None:
-            cells.append({"patch": patch_label(index), "missing": True})
+            cell = {"patch": patch_label(index), "missing": True}
+            if index in names:
+                cell.update(name=names[index].rstrip(), unnamed=names[index] == FACTORY_NAME)
+            cells.append(cell)
             continue
-        cells.append({
+        cell = {
             "patch": patch_label(index),
             "pending": patch_label(index) in pending["patches"],
             "stale": state["source"] == "cache" and patch_page(index) * 2 not in state["fresh"],
             **_cell(record),
-        })
+        }
+        if index in names and names[index].rstrip() != cell["name"]:  # renommé sur l'appareil depuis
+            cell.update(name=names[index].rstrip(), stale=True, unnamed=names[index] == FACTORY_NAME)
+        cells.append(cell)
     current = None
-    if state["dump"] and state["dump"].system is not None:
+    if state["dump"] is not None and state["dump"].system is not None:
         current = patch_label(decode_system(state["dump"].system)["current_num"])
     return json.dumps({"source": state["source"], "cached_at": state["cached_at"],
                        "fresh_patches": len({c // 2 for c in state["fresh"] if c >= 16}),

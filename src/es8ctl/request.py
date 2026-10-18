@@ -17,6 +17,11 @@ Une réponse peut perdre des messages (interface filaire qui retient ou
 perd la fin d'une rafale) : chaque page incomplète est redemandée seule.
 Les échos THRU de nos propres messages sont ignorés.
 
+Liste des noms (vérifiée sur l'appareil) : les messages 0x20 00 … 0x20 63
+(IDs 4096-4195) portent chacun 8 noms de 16 caractères ASCII, en clair (pas
+de codage 7 bits) : les 800 noms en 100 messages, environ 7 s, contre
+2 min 20 pour tout l'appareil. L'éditeur officiel les lit à la connexion.
+
 Ce module n'envoie que des requêtes de lecture et la bascule du mode
 éditeur, toujours désactivé en sortie.
 """
@@ -35,6 +40,10 @@ DEFAULT_IDLE_S = 2.0
 DEFAULT_RETRIES = 3
 SYSTEM_LAST_ID = PATCH_FIRST_COUNTER - 1  # 15
 SYSTEM_REQUEST = (0, PATCH_FIRST_COUNTER)  # 0..16 : seule forme qui rend les 16 messages système
+NAMELIST_FIRST_ID = 0x20 << 7  # 4096
+NAMELIST_MESSAGES = 100
+NAMES_PER_MESSAGE = 8
+NAME_LEN = 16
 
 
 def _sysex(command: int, body: list[int], device_id: int = 0x00) -> bytes:
@@ -47,7 +56,9 @@ def editor_mode_message(on: bool) -> bytes:
 
 def request_message(first_id: int, last_id: int) -> bytes:
     """RQ1 des messages first_id … last_id (inclus), comme l'éditeur officiel."""
-    if not 0 <= first_id <= last_id <= BULK_LAST_COUNTER:
+    in_bulk = 0 <= first_id <= last_id <= BULK_LAST_COUNTER
+    in_names = NAMELIST_FIRST_ID <= first_id <= last_id < NAMELIST_FIRST_ID + NAMELIST_MESSAGES
+    if not (in_bulk or in_names):
         raise ValueError(f"Invalid message range: {first_id}–{last_id}.")
     n = last_id - first_id
     return _sysex(CMD_RQ1, [first_id >> 7, first_id & 0x7F, n >> 7, n & 0x7F])
@@ -104,6 +115,35 @@ def read_pages(
         )
 
 
+def parse_namelist_message(raw: bytes) -> dict[int, str] | None:
+    """Message de la liste des noms → {numéro de patch: nom}, ou None si ce n'en est pas un."""
+    if len(raw) != 10 + NAMES_PER_MESSAGE * NAME_LEN + 2 or raw[:8] != bytes([0xF0, 0x41, raw[2], *MODEL, 0x12]):
+        return None
+    msg_id = raw[8] << 7 | raw[9]
+    if not NAMELIST_FIRST_ID <= msg_id < NAMELIST_FIRST_ID + NAMELIST_MESSAGES:
+        return None
+    if checksum(list(raw[8:-2])) != raw[-2]:
+        return None
+    data = raw[10:-2]
+    first = (msg_id - NAMELIST_FIRST_ID) * NAMES_PER_MESSAGE
+    return {first + i: data[i * NAME_LEN : (i + 1) * NAME_LEN].decode("ascii", "replace")
+            for i in range(NAMES_PER_MESSAGE)}
+
+
+def read_names(out_port: str, in_port: str, on_progress: Callable[[int, int], None] | None = None) -> dict[int, str]:
+    """Les 800 noms par ports mido (≈ 7 s). Enveloppe de `session.read_names_async`."""
+    import asyncio
+
+    import mido
+
+    from .session import MidoTransport, read_names_async
+
+    with mido.open_input(in_port) as inp, mido.open_output(out_port) as out:
+        for _ in inp.iter_pending():
+            pass
+        return asyncio.run(read_names_async(MidoTransport(inp, out), on_progress=on_progress))
+
+
 def frames_to_syx(frames: dict[int, bytes]) -> bytes:
     return b"".join(frames[c] for c in sorted(frames))
 
@@ -112,7 +152,9 @@ __all__ = [
     "editor_mode_message",
     "frames_to_syx",
     "page_ids",
+    "parse_namelist_message",
     "patch_page",
+    "read_names",
     "read_pages",
     "request_message",
 ]

@@ -43,6 +43,7 @@ es8ctl check changes.json captures/<nouvelle lecture>.syx  # 0 = tout est appliq
 | Commande | Rôle | Entrée → sortie |
 |---|---|---|
 | `devices` | ports MIDI | → `{input_ports, output_ports}` |
+| `names` | les 800 noms de patchs (≈ 7 s) | port → {"0-1": nom, …} |
 | `read` | lire l'appareil à distance | port → `.syx` (complet ou partiel) ; code 1 si des pages manquent |
 | `capture` | enregistrer un dump déclenché au panneau | port → `.syx` + sidecar |
 | `patches` | lire des patchs | `.syx` [`-p 0-1`] → `{patches: [{patch, …champs, loop_chain}]}` |
