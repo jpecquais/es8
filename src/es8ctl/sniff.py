@@ -24,6 +24,8 @@ from typing import Callable
 
 EDITOR_TO_DEVICE = "editor->es8"
 DEVICE_TO_EDITOR = "es8->editor"
+ECHO = "es8-echo"  # écho THRU d'un message de l'éditeur : journalisé, non retransmis
+ECHO_WINDOW_S = 1.0
 
 
 @dataclass
@@ -50,12 +52,19 @@ def relay(
     timeout_s: float | None = None,
     on_message: Callable[[str, dict], None] | None = None,
     device_in_port: str | None = None,
+    drop_echo: bool = True,
 ) -> SniffResult:
     """Relaie et journalise jusqu'à Ctrl-C (ou `timeout_s`).
 
     `device_in_port` : port d'écoute de l'ES-8 s'il diffère du port d'envoi
     (ex. envoi par le WIDI, réception par une interface filaire sur la MIDI
     OUT de l'ES-8 — le WIDI répond lui-même aux requêtes d'identité).
+
+    `drop_echo` : en « MIDI Out Mode : THRU », l'ES-8 renvoie ce qu'il reçoit
+    sur sa MIDI OUT ; l'éditeur, voyant revenir ses propres messages, échoue
+    (« MIDI Connection error »). Un message de l'ES-8 identique à un message
+    de l'éditeur envoyé dans la seconde précédente n'est donc pas retransmis
+    (il reste journalisé, sens « es8-echo »).
     """
     import mido
 
@@ -72,6 +81,7 @@ def relay(
             result.log_path.open("w", encoding="utf-8") as log,
         ):
             routes = ((from_editor, to_device, EDITOR_TO_DEVICE), (from_device, to_editor, DEVICE_TO_EDITOR))
+            recent: list[tuple[float, bytes]] = []  # messages récents de l'éditeur (détection d'écho)
             while timeout_s is None or time.monotonic() - start < timeout_s:
                 idle = True
                 for source, sink, direction in routes:
@@ -79,8 +89,20 @@ def relay(
                     if msg is None:
                         continue
                     idle = False
-                    sink.send(msg)  # retransmission d'abord : latence minimale
-                    entry = {"t": round(time.monotonic() - start, 4), "dir": direction, **_describe(msg)}
+                    now = time.monotonic()
+                    raw = bytes(msg.bytes())
+                    if direction == EDITOR_TO_DEVICE:
+                        recent.append((now, raw))
+                    recent[:] = [(t, r) for t, r in recent if now - t < ECHO_WINDOW_S]
+                    is_echo = (
+                        drop_echo and direction == DEVICE_TO_EDITOR and any(r == raw for _, r in recent)
+                    )
+                    if is_echo:
+                        recent.remove(next((t, r) for t, r in recent if r == raw))
+                        direction = ECHO
+                    else:
+                        sink.send(msg)  # retransmission d'abord : latence minimale
+                    entry = {"t": round(now - start, 4), "dir": direction, **_describe(msg)}
                     log.write(json.dumps(entry) + "\n")
                     log.flush()
                     result.counts[direction] += 1

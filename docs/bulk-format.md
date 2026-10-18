@@ -129,10 +129,34 @@ Rythme retenu : 60 ms entre les deux moitiés d'une page, 0,5 s entre pages
 
 Le WIDI répond lui-même à la requête d'identité universelle
 (`F0 7E 7F 06 02 00 20 63 …`, CME) : c'est un test de la liaison Bluetooth
-(Mac ↔ WIDI), pas de la prise DIN ni de l'ES-8. L'ES-8 ne répond ni à RQ1 ni
-à l'identité ; l'éditeur officiel sait pourtant lire l'appareil par MIDI
-(manuel : « patch parameters … are loaded automatically ») — la commande
-est à capturer en écoutant l'éditeur.
+(Mac ↔ WIDI), pas de la prise DIN ni de l'ES-8. Les premiers essais RQ1
+semblaient sans réponse : ils avaient été faits sur l'écran Bulk Dump.
+
+### Protocole de l'éditeur officiel (lu dans son code, vérifié sur l'appareil)
+
+L'éditeur macOS (ES-8 Editor 1.02) est une application web : sa logique
+MIDI (`es_midi.js`) et sa base de paramètres (`es_parameter.js`, `prmdb`)
+sont lisibles.
+
+- **Lecture** : `F0 41 dev 00 00 00 14 11 <ID MSB> <ID LSB> <n MSB> <n LSB> <somme> F7`
+  demande les messages de bulk ID … ID + n ; l'ES-8 répond au format exact
+  du bulk dump. Bloc système : toute requête le rend depuis 0, borne de fin
+  exclue → le lire avec 0..16. Lecture complète vérifiée : 1616 trames en
+  2 min 18 via WIDI, identiques au dump panneau. `es8ctl read`.
+- **Commandes DT1 `7F xx`** (données sur 2 octets) : `7F50` mode éditeur
+  (0001 / 0000), `7F01` changer de patch, `7F03` mode d'affichage, `7F21`
+  initialiser, `7F22` copier, `7F23` échanger (source via `7F60`), `7F24`
+  renommer (caractères via `7F70`…`7F7F`).
+- **Identité** : réponse `F0 7E 00 06 02 41 14 03 00 00 00 4D 00 00 F7`
+  (famille 14 03). Le WIDI répond lui-même à cette requête et masque celle de
+  l'ES-8 : c'est ce qui fait échouer l'éditeur via WIDI. En « MIDI Out
+  Mode : THRU », l'ES-8 renvoie aussi en écho les messages Roland reçus.
+
+**Carte des champs** : la base `prmdb` de l'éditeur (125 paramètres)
+concorde avec notre carte pour la position, la largeur, le nombre et les
+bornes de chaque champ, à une borne près (`assign_target` : 0–45). Elle
+localise les 10 derniers champs système : `manual_number1-8` (bits 271–302,
+4 bits), `tempo_hold` (303), `link` (304–305, OFF/ON/AUTO).
 
 ### Validation par un `.bel` de l'éditeur officiel
 
@@ -155,22 +179,21 @@ systématique par re-dump.
 
 ## Prochaine session matériel
 
-Toujours : lancer la capture avant le dump, et **quitter l'écran Bulk Dump
-avant d'écrire**.
+Écrire : l'ES-8 sur l'écran de jeu (EXIT après un dump au panneau). Lire :
+`es8ctl read`, aucun geste requis.
 
-1. Basculer `Tempo Hold` dans les réglages système, dumper, `es8ctl diff`
-   → position de `tempo_hold` (puis `LINK`, `MANUAL_NUMBER`).
-2. Écrire les transformations en masse (tap tempo partout, échange 6 ↔ 7)
-   et vérifier avec `es8ctl check`.
-3. Tester un rythme plus rapide (`--page-gap 0.2`) sur l'écran de jeu.
-4. Écouter l'éditeur officiel (Windows) pour trouver la commande de lecture
-   et l'édition en temps réel.
+1. Écrire les transformations en masse (tap tempo partout, échange 6 ↔ 7)
+   et vérifier par `es8ctl read` + `es8ctl check`.
+2. Tester un rythme d'écriture plus rapide (`--page-gap 0.2`).
+3. Édition en temps réel : les commandes `7F xx` de l'éditeur (renommer,
+   copier, échanger, changer de patch) sont connues ; aucune adresse de
+   paramètre individuel n'existe — l'éditeur réécrit des pages entières.
 
 ## Questions ouvertes
 
 1. ~~Dernière trame manquante~~ : résolu, un dump complet fait 1616 trames
    (jusqu'à `0C 4F`) ; les premières captures s'arrêtaient trop tôt.
-2. Position de `manual_number1-8`, `tempo_hold`, `link` dans la page système 1.
+2. ~~Position de `manual_number1-8`, `tempo_hold`, `link`~~ : résolu (base de l'éditeur).
 3. Comportement de l'ES-8 à la réception d'une seule page (écriture
    partielle) : à vérifier au premier essai d'écriture.
 4. Confirmer par dump les champs `inferred` (`mixer_*`, `midi_clock_out`,

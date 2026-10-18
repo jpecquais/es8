@@ -81,3 +81,20 @@ def test_relay_with_separate_device_input(tmp_path, monkeypatch):
 
     assert opened == ["ed", "wired"]
     assert sent["device"] == [REQUEST] and sent["editor"] == [REPLY]
+
+
+def test_relay_drops_thru_echo(tmp_path, monkeypatch):
+    """L'écho THRU d'un message de l'éditeur n'est pas renvoyé à l'éditeur."""
+    from es8ctl.sniff import ECHO
+
+    sent = {"editor": [], "device": []}
+    inputs = {"ed": FakeIn([REQUEST, None, None, None, KeyboardInterrupt()]),
+              "dev": FakeIn([None, REQUEST, REPLY])}
+    monkeypatch.setattr(mido, "open_input", lambda p: inputs[p])
+    monkeypatch.setattr(mido, "open_output", lambda p: FakeOut(sent["editor" if p == "ed" else "device"]))
+
+    result = relay("ed", "dev", tmp_path)
+
+    assert sent["editor"] == [REPLY]
+    dirs = [json.loads(l)["dir"] for l in result.log_path.read_text().splitlines()]
+    assert dirs == [EDITOR_TO_DEVICE, ECHO, DEVICE_TO_EDITOR]

@@ -19,22 +19,22 @@ CLI, jamais au MIDI directement.** Toutes les écritures passent par
 
 ## Ce que l'agent ne peut pas faire seul
 
-- **Lire l'ES-8** : le dump se déclenche au panneau (EDIT → Utility → Bulk
-  Dump). L'agent lance `es8ctl capture` puis demande à l'humain de déclencher.
 - **Garantir la réception** : après un dump, l'ES-8 reste sur l'écran Bulk
   Dump où il **ignore sans erreur** tout ce qu'il reçoit. Avant toute
   écriture, demander à l'humain d'appuyer sur EXIT (écran de jeu).
 
+Lire l'appareil ne demande aucun geste : `es8ctl read` l'interroge à distance.
+
 ## Boucle type
 
 ```sh
-es8ctl capture --port "WIDI Jack Bluetooth"          # humain : déclencher le dump, puis EXIT
+es8ctl read --port "WIDI Jack Bluetooth"             # état actuel → captures/read_*.syx
 es8ctl patches captures/<dump>.syx -p 0-8            # lire
 es8ctl transform set "master_bpm=120" -b captures/<dump>.syx --patches 0-1..0-8 -o changes.json
 es8ctl apply changes.json -b captures/<dump>.syx     # simulation : lire "changes"
 es8ctl apply changes.json -b captures/<dump>.syx --write --port "WIDI Jack Bluetooth"
-es8ctl capture --port "WIDI Jack Bluetooth"          # humain : déclencher le dump, puis EXIT
-es8ctl check changes.json captures/<nouveau dump>.syx  # 0 = tout est appliqué
+es8ctl read --port "WIDI Jack Bluetooth"             # relire l'appareil
+es8ctl check changes.json captures/<nouvelle lecture>.syx  # 0 = tout est appliqué
 ```
 
 ## Commandes
@@ -42,7 +42,8 @@ es8ctl check changes.json captures/<nouveau dump>.syx  # 0 = tout est appliqué
 | Commande | Rôle | Entrée → sortie |
 |---|---|---|
 | `devices` | ports MIDI | → `{input_ports, output_ports}` |
-| `capture` | enregistrer un dump | port → `.syx` + sidecar ; s'arrête seule à la dernière trame |
+| `read` | lire l'appareil à distance | port → `.syx` (complet ou partiel) ; code 1 si des pages manquent |
+| `capture` | enregistrer un dump déclenché au panneau | port → `.syx` + sidecar |
 | `patches` | lire des patchs | `.syx` [`-p 0-1`] → `{patches: [{patch, …champs, loop_chain}]}` |
 | `system` | lire le système | `.syx` → `{system: {…}}` |
 | `diff` | comparer deux dumps | → plages de bits par patch |

@@ -6,11 +6,8 @@ l'éditeur ; nos noms de champs en sont la version minuscule sans préfixe,
 dans le même ordre (seule exception : `ID_PATCH_LOOP_SW_LOOP` ↔ `loop_sw`).
 Le nom d'un patch y est une liste de 16 codes ASCII.
 
-Limites, signalées dans `warnings` :
-- 10 clés système (`MANUAL_NUMBER1-8`, `TEMPO_HOLD`, `LINK`) ne sont pas
-  localisées dans la page système : ignorées à l'import, exportées à la
-  valeur 0 (bits correspondants à zéro sur les dumps observés) ;
-- le dernier message d'un dump (patch 99-8, seconde moitié) n'est jamais
+Limite, signalée dans `warnings` :
+- sur les anciennes captures, le dernier message d'un dump (patch 99-8, seconde moitié) n'est jamais
   reçu : à l'export, 99-8 est reconstitué à partir du patch d'usine si sa
   première moitié lui est identique, sinon complété par la seconde moitié
   d'usine (avertissement).
@@ -28,11 +25,6 @@ BEL_TARGET = "ES-8"
 BEL_FORMAT = 100
 
 _PATCH_KEY_OVERRIDES = {"loop_sw": "ID_PATCH_LOOP_SW_LOOP"}
-UNMAPPED_SYSTEM_KEYS = (
-    *(f"ID_SYSTEM_MANUAL_NUMBER{i}" for i in range(1, 9)),
-    "ID_SYSTEM_TEMPO_HOLD",
-    "ID_SYSTEM_LINK",
-)
 
 
 def patch_key(name: str) -> str:
@@ -87,12 +79,6 @@ def export_bel(dump: BulkDump, last_frames: dict[int, bytes] | None = None) -> t
 
     system_fields = decode_system(dump.system)
     system = {system_key(f.name): system_fields[f.name] for f in SYSTEM_FIELDS}
-    pc_maps = {k: system.pop(k) for k in list(system) if "_PC_MAP_" in k}
-    system.update({key: 0 for key in UNMAPPED_SYSTEM_KEYS})  # ordre du .bel : avant les tables PC
-    system.update(pc_maps)
-    warnings.append(
-        "Système : MANUAL_NUMBER1-8, TEMPO_HOLD, LINK non localisés, exportés à 0."
-    )
     return {"target": BEL_TARGET, "format": BEL_FORMAT, "system": system, "patch": patches}, warnings
 
 
@@ -100,7 +86,7 @@ def import_bel(document: dict, base: BulkDump) -> tuple[dict, list[str]]:
     """Document `.bel` → changements JSON (pour `apply`) par rapport au dump `base`.
 
     Seuls les champs qui diffèrent de `base` sont retenus. Clé inconnue ou
-    manquante = erreur ; les 10 clés système non localisées sont ignorées.
+    manquante = erreur.
     """
     if not isinstance(document, dict) or document.get("target") != BEL_TARGET:
         raise CodecError(f'Pas un .bel ES-8 (attendu "target": "{BEL_TARGET}").')
@@ -131,13 +117,10 @@ def import_bel(document: dict, base: BulkDump) -> tuple[dict, list[str]]:
     if not isinstance(system_in, dict):
         raise CodecError('"system" : objet attendu.')
     known = {system_key(f.name): f.name for f in SYSTEM_FIELDS}
-    unexpected = set(system_in) - set(known) - set(UNMAPPED_SYSTEM_KEYS)
+    unexpected = set(system_in) - set(known)
     missing = set(known) - set(system_in)
     if unexpected or missing:
         raise CodecError(f"Système : clés inattendues {sorted(unexpected)}, manquantes {sorted(missing)}.")
-    ignored = [k for k in UNMAPPED_SYSTEM_KEYS if k in system_in]
-    if ignored:
-        warnings.append(f"Système : {len(ignored)} clé(s) non localisée(s) ignorée(s) ({', '.join(ignored)}).")
     if base.system is None:
         warnings.append("Le dump de base n'a pas de bloc système : système ignoré.")
     else:

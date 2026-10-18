@@ -20,9 +20,9 @@ TEXT_FIELDS = frozenset({"name"})
 class Field:
     """`count` valeurs consécutives de `width` bits à partir de `bit`.
 
-    `confidence` : « confirmed » (dump différentiel), « spec » (spec Roland,
-    cohérente sur les fixtures) ou « inferred » (largeur déduite, non
-    confirmée individuellement).
+    `confidence` : « confirmed » (dump différentiel sur l'appareil) ou
+    « official » (base de paramètres `prmdb` de l'éditeur BOSS officiel, qui
+    concorde entièrement avec la spec Roland recalée).
     """
 
     name: str
@@ -31,7 +31,7 @@ class Field:
     count: int
     lo: int
     hi: int
-    confidence: str = "spec"
+    confidence: str = "official"
 
     @property
     def end(self) -> int:
@@ -50,7 +50,7 @@ def build_layout(layout: tuple[tuple, ...]) -> tuple[Field, ...]:
     """Positionne des champs contigus à partir du bit 0."""
     fields, bit = [], 0
     for name, count, width, lo, hi, *rest in layout:
-        fields.append(Field(name, bit, width, count, lo, hi, rest[0] if rest else "spec"))
+        fields.append(Field(name, bit, width, count, lo, hi, rest[0] if rest else "official"))
         bit += count * width
     return tuple(fields)
 

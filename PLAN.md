@@ -9,10 +9,10 @@ apportées par la recherche initiale, et la séquence de travail.
 | Étape | État | Détail |
 |---|---|---|
 | 0 — Session hardware n°1 | ✅ | Dump initié au panneau ; 1616 trames ; fixture n°1 |
-| 1 — Noyau offline | ✅ | Format complet décodé (spec Roland v1 recalée sur v2), round-trip bit à bit, schéma JSON aligné `.bel` |
+| 1 — Noyau offline | ✅ | Format complet décodé, identique à la base de paramètres de l'éditeur officiel ; round-trip bit à bit ; schéma JSON aligné `.bel` |
 | 2 — CLI v1 | ✅ | `capture`, `diff`, `patches`, `system`, `apply` (dry-run / `--write`, backup), `verify`, `check` ; écriture vérifiée sur l'ES-8 |
 | 3 — Transformations en masse | ✅ en partie | `transform set` / `swap-loops` / `variants` ; variantes vérifiées sur l'appareil (50/50), tap tempo et swap 6↔7 à écrire |
-| 4 — Temps réel | 🟡 | Relais `es8ctl sniff` prêt ; capture de l'éditeur officiel à faire (`docs/sniff-editor.md`) |
+| 4 — Temps réel | 🟡 | Protocole de l'éditeur officiel lu dans son code : lecture à distance (`es8ctl read`) opérationnelle ; commandes `7F xx` (renommer, copier, échanger…) connues, à exposer |
 | 5 — GUI / contrat agent | 🟡 | Contrat agent rédigé (`docs/agent-contract.md`) ; GUI non commencée |
 
 Hors plan : import / export `.bel` (`es8ctl import-bel` / `export-bel`).
@@ -34,7 +34,7 @@ Détails du format et journal des essais : `docs/bulk-format.md`.
 
 | Hypothèse initiale | Correction (recherche 2026-10-17) |
 |---|---|
-| Bulk dump demandé par le CLI (RQ1 hôte) | Confirmé : le dump est **initié au panneau** ; l'ES-8 ne répond à aucune requête RQ1 connue. `capture` = mode écoute. L'éditeur officiel sait pourtant lire l'appareil : commande à capturer (étape 4). |
+| Bulk dump demandé par le CLI (RQ1 hôte) | Les deux : dump au panneau (`capture`) **et** requête RQ1 de l'éditeur officiel (`read`), sans geste humain. |
 | Transport = DIN vers interface | Confirmé : l'ES-8 n'a pas d'USB, le DIN via interface est le seul transport. |
 | `.bel` partiellement cartographié | Confirmé : `es8-bulk-editor` (qckpckt) ne touche jamais le MIDI, ne traite que des `.bel` (mapping surtout sur les assigns ; projet quasi inactif). Utilisable comme **oracle sémantique**, pas comme base de code. |
 | Carte d'adresses temps réel | Aucune carte publiée n'existe. Le RE (phase 0) est réellement nécessaire. |

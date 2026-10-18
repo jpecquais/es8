@@ -1,7 +1,7 @@
 """Noms symboliques des index et des valeurs de champs (lisibles par un humain ou un agent).
 
-Sources : ordre des paramètres de la spec Roland (index de `ctl_func`) et
-tables de l'oracle `es8-bulk-editor` (valeurs, ordre de l'éditeur officiel).
+Sources : spec Roland (index de `ctl_func`) et listes de valeurs de l'éditeur
+BOSS officiel (es_parameter.js).
 Permet d'écrire `ctl_func[NUM_8]=BPM` plutôt que `ctl_func[11]=21`.
 """
 
@@ -27,16 +27,17 @@ CTL_FUNCTIONS = (
     "CTL_1", "CTL_2", "CTL_3", "CTL_4", "CTL_5", "CTL_6", "BPM",
 )
 
-# Valeurs de assign_target, ordre de l'éditeur officiel (v2 : jusqu'à PMIDI8).
+# Valeurs de assign_target (0-45), ordre de l'éditeur officiel (es_parameter.js).
 ASSIGN_TARGETS = (
     "L1", "L2", "L3", "L4", "L5", "L6", "L7", "L8", "LV",
     "CTL1", "CTL2", "CTL3", "CTL4", "CTL5", "CTL6", "EXP1", "EXP2",
     "IN", "OUT", "MEM_M", "MUTE", "BYPASS", "MIDI", "MASTER_BPM", "TAP",
-    "LED_BANK_D", "LED_BANK_U",
+    "LED_MEM_M", "LED_MUTE", "LED_BYPASS", "LED_BANK_D", "LED_BANK_U",
     "LED_NUM1", "LED_NUM2", "LED_NUM3", "LED_NUM4",
     "LED_NUM5", "LED_NUM6", "LED_NUM7", "LED_NUM8",
     "PMIDI1", "PMIDI2", "PMIDI3", "PMIDI4", "PMIDI5", "PMIDI6", "PMIDI7", "PMIDI8",
 )
+assert len(ASSIGN_TARGETS) == 46
 
 # Noms d'index par champ (champs listes) ; noms de valeurs par champ.
 INDEX_NAMES: dict[str, tuple[str, ...]] = {

@@ -23,17 +23,19 @@ def system():
 
 
 def test_page1_layout_anchors():
-    """Spec v1 : bits 0-84 ; extension v2 jusqu'au bit 271."""
+    """Spec v1 : bits 0-84 ; extension v2 jusqu'au bit 306 (base de l'éditeur officiel)."""
     by_name = {f.name: f for f in PAGE_FIELDS[0]}
     assert by_name["others_lcd_contrast"].bit == 9 * 8 + 0
     assert by_name["memory_manual"].bit == 10 * 8 + 4
     assert by_name["ctl_sw"].bit == 85
-    assert PAGE_FIELDS[0][-1].end == 271
+    assert by_name["manual_number1"].bit == 271
+    assert by_name["tempo_hold"].bit == 303 and by_name["link"].bit == 304
+    assert PAGE_FIELDS[0][-1].end == 306
 
 
 def test_unmapped_page1_bits_are_zero_on_fixture(system):
     page1 = split_pages(system)[0]
-    assert int.from_bytes(page1, "big") & ((1 << (2000 - 271)) - 1) == 0
+    assert int.from_bytes(page1, "big") & ((1 << (2000 - 306)) - 1) == 0
 
 
 def test_decode_matches_editor_defaults(system):

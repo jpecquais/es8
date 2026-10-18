@@ -7,7 +7,7 @@ import pytest
 from typer.testing import CliRunner
 
 from es8ctl.apply import plan_changes
-from es8ctl.bel import UNMAPPED_SYSTEM_KEYS, export_bel, import_bel
+from es8ctl.bel import export_bel, import_bel
 from es8ctl.cli import app
 from es8ctl.codec import CodecError, frames_by_counter, split_frames
 from es8ctl.diff import load_dump
@@ -34,9 +34,8 @@ def test_export_shape(document):
     assert list(first)[:2] == ["ID_PATCH_LOOP_SW_LOOP", "ID_PATCH_LOOP_POSITION"]
     assert first["ID_PATCH_NAME"] == [ord(c) for c in "AAAAAAAAAAAAAAAA"]
     keys = list(document["system"])
-    # Ordre de l'éditeur : clés non localisées juste avant les tables de PC.
+    # Ordre de l'éditeur : LINK juste avant les tables de PC.
     assert keys.index("ID_SYSTEM_LINK") + 1 == keys.index("ID_SYSTEM_PC_MAP_BANK0_PC")
-    assert all(document["system"][k] == 0 for k in UNMAPPED_SYSTEM_KEYS)
 
 
 def test_export_reconstructs_truncated_last_patch(dump):
@@ -47,7 +46,6 @@ def test_export_reconstructs_truncated_last_patch(dump):
 def test_roundtrip_is_empty(document, dump):
     changes, warnings = import_bel(document, dump)
     assert changes == {"patches": {}}
-    assert any("99-8" in w for w in warnings)
 
 
 def test_import_edit_flows_into_apply(document, dump, tmp_path):

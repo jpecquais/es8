@@ -1,4 +1,4 @@
-"""CLI es8ctl : devices · capture · inspect · diff · patches · system · transform · apply · verify · check · export-bel · import-bel · sniff.
+"""CLI es8ctl : devices · capture · inspect · diff · patches · system · transform · apply · verify · check · export-bel · import-bel · sniff · read.
 
 Sortie JSON machine-first par défaut. Seule `apply --write` émet vers l'ES-8,
 après validation complète et sauvegarde horodatée du dump de base.
@@ -531,6 +531,64 @@ def sniff(
     except Exception as exc:  # surface explicite
         _fail(1, error=str(exc))
     _print_json(result.summary())
+
+
+@app.command()
+def read(
+    port: str = typer.Option(..., "--port", "-p", help="Port de sortie vers l'ES-8 (ex. WIDI)."),
+    port_in: str = typer.Option(None, "--port-in", help="Port d'écoute de l'ES-8, s'il diffère de --port."),
+    patches: str = typer.Option("all", "--patches", help="Patchs à lire : all, none, 0-1..9-8, 0-1,2-3."),
+    system: bool = typer.Option(True, "--system/--no-system", help="Lire aussi le bloc système."),
+    out_dir: Path = typer.Option(Path("captures"), "--out", "-o", help="Répertoire de sortie."),
+    chunk: int = typer.Option(8, "--chunk", help="Pages par requête (les pages manquantes sont redemandées seules)."),
+) -> None:
+    """Lit l'ES-8 à distance (RQ1), sans dump au panneau. Écrit un .syx partiel ou complet.
+
+    Code 0 si tout est lu, 1 si des pages manquent malgré les relances, 2 erreur.
+    """
+    from .codec import PATCH_COUNT
+    from .request import frames_to_syx, patch_page, read_pages
+    from .transfer import list_output_ports, resolve_port
+
+    outputs, inputs = list_output_ports(), list_ports()
+    out_port = resolve_port(port, outputs)
+    in_port = resolve_port(port_in or port, inputs)
+    if out_port is None or in_port is None:
+        _fail(2, error="Port introuvable.", inputs=inputs, outputs=outputs)
+    if patches.strip().lower() == "none":
+        indices = []
+    elif patches.strip().lower() == "all":
+        indices = list(range(PATCH_COUNT))
+    else:
+        try:
+            from .codec import parse_patch_label
+
+            indices = sorted({i for part in patches.split(",") for i in (
+                range(parse_patch_label(part.split("..")[0].strip()),
+                      parse_patch_label(part.split("..")[-1].strip()) + 1))})
+        except CodecError as exc:
+            _fail(2, error=str(exc))
+    pages = (list(range(8)) if system else []) + [patch_page(i) for i in indices]
+    if not pages:
+        _fail(2, error="Rien à lire.")
+
+    def progress(n: int, total: int) -> None:
+        typer.echo(f"\r{n}/{total} message(s) reçu(s)   ", err=True, nl=False)
+
+    typer.echo(f"Lecture de {len(pages)} page(s) : envoi {out_port}, écoute {in_port}.", err=True)
+    try:
+        frames, missing = read_pages(out_port, in_port, pages, chunk_pages=chunk, on_progress=progress)
+    except Exception as exc:  # surface explicite
+        _fail(2, error=str(exc))
+    typer.echo("", err=True)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    target = out_dir / f"read_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}.syx"
+    target.write_bytes(frames_to_syx(frames))
+    labels = [("système " + str(p + 1)) if p < 8 else patch_label(p - 8) for p in missing]
+    _print_json({"syx": str(target), "frames": len(frames), "pages_requested": len(pages),
+                 "missing_pages": labels})
+    if missing:
+        raise typer.Exit(code=1)
 
 
 def main() -> None:

@@ -6,9 +6,8 @@ Le bloc système = 8 pages de 250 octets (messages 00 00 – 00 0F).
   ajoute ensuite les fonctions CTL/EXP du mode manuel (`ctl_sw` … `exp_max`),
   aux largeurs de leurs équivalents de patch : lecture cohérente avec les
   défauts du `.bel` (`ctl_sw` [0, 1, 0…], `ctl_func` [1, 2, 3, 4, 7…]).
-  Le `.bel` liste encore `manual_number1-8`, `tempo_hold` et `link`, dont la
-  position n'est pas établie (bits 271+ à zéro sur la fixture) : ils ne sont
-  pas décodés, et `encode_system` conserve ces bits tels quels.
+  Puis `manual_number1-8` (4 bits), `tempo_hold` et `link` (bits 271–305),
+  positions tirées de la base de paramètres de l'éditeur officiel (prmdb).
 - Pages 2–8 : `pc_map_bank0_pc` … `pc_map_bank6_pc`, 128 × 10 bits chacune :
   patch (0–799) rappelé par chaque program change, par banque MIDI.
 
@@ -54,16 +53,19 @@ _PAGE1: tuple[tuple, ...] = (
     ("preference_memory_manual_sw_mode", 1, 1, 0, 1),
     ("preference_mute_bypass_sw_mode", 1, 1, 0, 1),
     ("memory_manual", 1, 1, 0, 1),
-    # Extension v2 (mode manuel), largeurs des champs de patch équivalents.
-    ("ctl_sw", 16, 1, 0, 1, "inferred"),
-    ("ctl_func", 16, 5, 0, 21, "inferred"),
-    ("ctl_min", 16, 1, 0, 1, "inferred"),
-    ("ctl_max", 16, 1, 0, 1, "inferred"),
-    ("ctl_mod", 16, 1, 0, 1, "inferred"),
-    ("exp_sw", 2, 1, 0, 1, "inferred"),
-    ("exp_func", 2, 2, 0, 3, "inferred"),
-    ("exp_min", 2, 9, 0, 500, "inferred"),
-    ("exp_max", 2, 9, 0, 500, "inferred"),
+    # Extension v2 (mode manuel) ; confirmée par la base de l'éditeur officiel.
+    ("ctl_sw", 16, 1, 0, 1, "official"),
+    ("ctl_func", 16, 5, 0, 21, "official"),
+    ("ctl_min", 16, 1, 0, 1, "official"),
+    ("ctl_max", 16, 1, 0, 1, "official"),
+    ("ctl_mod", 16, 1, 0, 1, "official"),
+    ("exp_sw", 2, 1, 0, 1, "official"),
+    ("exp_func", 2, 2, 0, 3, "official"),
+    ("exp_min", 2, 9, 0, 500, "official"),
+    ("exp_max", 2, 9, 0, 500, "official"),
+    *((f"manual_number{i}", 1, 4, 0, 9, "official") for i in range(1, 9)),
+    ("tempo_hold", 1, 1, 0, 1, "official"),
+    ("link", 1, 2, 0, 2, "official"),  # OFF / ON / AUTO
 )
 
 PAGE_FIELDS: tuple[tuple[Field, ...], ...] = (
@@ -103,8 +105,8 @@ def system_out_of_range(decoded: dict) -> list[str]:
 def encode_system(base: bytes, values: dict) -> bytes:
     """Écrit `values` dans une copie du bloc système `base` (domaine MIDI).
 
-    Les bits non fournis (dont les champs v2 non cartographiés) sont
-    conservés. Champ inconnu ou valeur hors bornes = erreur.
+    Les bits non fournis sont conservés. Champ inconnu ou valeur hors
+    bornes = erreur.
     """
     known = {f.name for f in SYSTEM_FIELDS}
     unknown = set(values) - known

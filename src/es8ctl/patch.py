@@ -32,9 +32,9 @@ FIRMWARE = "v2"
 _LAYOUT: tuple[tuple, ...] = (
     ("loop_sw", 9, 1, 0, 1, "confirmed"),
     ("loop_position", 22, 4, 0, 15),
-    ("mixer_mode", 1, 1, 0, 1, "inferred"),
-    ("mixer_gain1", 1, 1, 0, 1, "inferred"),
-    ("mixer_gain2", 1, 1, 0, 1, "inferred"),
+    ("mixer_mode", 1, 1, 0, 1, "official"),
+    ("mixer_gain1", 1, 1, 0, 1, "official"),
+    ("mixer_gain2", 1, 1, 0, 1, "official"),
     ("carry_over_loop", 9, 1, 0, 1),
     ("input_select", 1, 1, 0, 1),
     ("input_buffer", 1, 1, 0, 1),
@@ -79,8 +79,8 @@ _LAYOUT: tuple[tuple, ...] = (
     ("assign_sw", 12, 1, 0, 1),
     ("assign_source", 12, 5, 0, 21),
     ("assign_mode", 12, 1, 0, 1),
-    # v1 : 0-37 ; v2 ajoute PMIDI1-8 (ordre de l'éditeur, cf. names.ASSIGN_TARGETS).
-    ("assign_target", 12, 6, 0, 42),
+    # v1 : 0-37 ; v2 : 0-45 (LED MemM/Mute/Byps, PMIDI1-8 ; cf. names.ASSIGN_TARGETS).
+    ("assign_target", 12, 6, 0, 45),
     ("assign_target_cc_ch", 12, 4, 0, 15),
     ("assign_target_cc_no", 12, 7, 0, 127),
     ("assign_target_min", 12, 9, 0, 511),
@@ -93,8 +93,8 @@ _LAYOUT: tuple[tuple, ...] = (
     ("assign_int_pedal_curve", 12, 2, 0, 2),
     ("assign_wave_pedal_rate", 12, 7, 1, 120),
     ("assign_wave_pedal_form", 12, 2, 0, 2),
-    ("midi_clock_out", 1, 1, 0, 1, "inferred"),
-    ("midi_transmit", 8, 1, 0, 1, "inferred"),
+    ("midi_clock_out", 1, 1, 0, 1, "official"),
+    ("midi_transmit", 8, 1, 0, 1, "official"),
 )
 
 

@@ -5,18 +5,28 @@ et la séquence de travail.
 
 ## État actuel
 
-Étapes 1 et 2 terminées : dump décodé en entier (patchs et système),
-écriture vérifiée sur l'appareil. Étape 3 : transformations en masse
-(`es8ctl transform`), les trois cas d'usage cibles passent en une commande.
-Import / export `.bel` (format de l'éditeur officiel). **En cours :**
-écrire les transformations en masse sur l'appareil — voir « Prochaine
-session matériel » dans `docs/bulk-format.md`.
+Format entièrement décodé (patchs et système) — carte identique à la base
+de paramètres de l'éditeur BOSS officiel. Lecture à distance (`es8ctl read`,
+sans dump au panneau), écriture vérifiée sur l'appareil, transformations en
+masse, import / export `.bel`. Détails : `docs/bulk-format.md`.
 
 ## Installation
 
 ```sh
 uv sync
 ```
+
+## Lire l'ES-8
+
+```sh
+es8ctl read --port "WIDI Jack Bluetooth"                  # tout (≈ 2 min 20)
+es8ctl read --port "WIDI Jack Bluetooth" --patches 0-1..0-8 --no-system
+```
+
+Requête RQ1 (protocole de l'éditeur officiel) : aucun geste au panneau.
+Les pages perdues en route sont redemandées. `--port-in` si l'ES-8 est
+écouté sur une autre interface. `es8ctl capture` (dump déclenché au
+panneau) reste disponible.
 
 ## Session hardware n°1
 
@@ -68,7 +78,7 @@ uv sync
 
 ```
 src/es8ctl/
-  cli.py          # typer : devices · capture · inspect · diff · patches · system · transform · apply · verify · check · export-bel · import-bel · sniff
+  cli.py          # typer : devices · capture · inspect · diff · patches · system · transform · apply · verify · check · export-bel · import-bel · sniff · read
   capture.py      # écoute MIDI, enregistrement, sidecar JSON
   diff.py         # comparaison de dumps (système, patchs bit à bit)
   layout.py       # champs empaquetés au bit ↔ JSON (mécanique commune)
@@ -79,6 +89,7 @@ src/es8ctl/
   transform.py    # transformations en masse → changements JSON
   bel.py          # import / export .bel (éditeur officiel)
   sniff.py        # relais enregistreur éditeur officiel ⇄ ES-8
+  request.py      # lecture à distance (RQ1, mode éditeur)
   apply.py        # changements JSON → pages → trames (validation, sans MIDI)
   transfer.py     # envoi MIDI vers l'ES-8 (seul module émetteur)
   codec/
@@ -171,7 +182,6 @@ es8ctl import-bel fichier.bel --base captures/<dump>.syx -o changes.json
 es8ctl apply changes.json --base captures/<dump>.syx
 ```
 
-Clés et ordre identiques à ceux de l'éditeur. Limites (signalées) : 10 clés
-système non localisées (`MANUAL_NUMBER1-8`, `TEMPO_HOLD`, `LINK`) ; le
-patch 99-8, dont le dernier message n'est jamais reçu, est complété par la
-seconde moitié du patch d'usine.
+Clés et ordre identiques à ceux de l'éditeur. Sur une ancienne capture sans
+la trame 0C 4F, le patch 99-8 est complété par la seconde moitié du patch
+d'usine (avertissement).
