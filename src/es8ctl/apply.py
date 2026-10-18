@@ -42,8 +42,16 @@ from .system import SYSTEM_PAGES, decode_system, encode_system
 
 # Spec Roland : au moins 50 ms entre deux messages. Marge de sécurité.
 DEFAULT_INTERVAL_S = 0.06
-# Pause entre deux pages (voir transfer.py) ; valeur prudente, à affiner.
-DEFAULT_PAGE_GAP_S = 1.0
+# Pause entre deux pages (voir transfer.py) : 0,5 s validé sur 44 pages via WIDI.
+DEFAULT_PAGE_GAP_S = 0.5
+
+# Condition côté appareil, établie le 2026-10-18 : sur l'écran Utility > Bulk
+# Dump (où il reste après un dump déclenché au panneau), l'ES-8 ignore
+# silencieusement tout bulk dump reçu.
+DEVICE_PRECONDITION = (
+    "L'ES-8 doit être sur l'écran de jeu : après un dump au panneau, quitter "
+    "l'écran Bulk Dump (EXIT), sinon les pages reçues sont ignorées sans erreur."
+)
 
 
 @dataclass(frozen=True)

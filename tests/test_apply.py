@@ -225,3 +225,20 @@ def test_cli_check_exit_codes(tmp_path):
     runner = CliRunner()
     assert runner.invoke(app, ["check", str(changes), str(expected)]).exit_code == 0
     assert runner.invoke(app, ["check", str(changes), str(FULL)]).exit_code == 1
+
+
+def test_cli_verify_ignores_selected_patch(tmp_path):
+    """current_num (patch sélectionné) change à chaque navigation : pas un écart."""
+    plan = plan_changes(frames(FULL), CHANGE)
+    expected = tmp_path / "exp.syx"
+    expected.write_bytes(plan.expected)
+    moved = plan_changes(list(split_frames(plan.expected)), {"system": {"current_num": 392}})
+    actual = tmp_path / "actual.syx"
+    actual.write_bytes(moved.expected)
+    result = CliRunner().invoke(app, ["verify", str(expected), str(actual)])
+    assert result.exit_code == 0, result.output
+    report = json.loads(result.stdout)
+    assert report["match"] is True and "current_num" in report["notes"][0]
+    contrast = plan_changes(list(split_frames(plan.expected)), {"system": {"others_lcd_contrast": 9}})
+    actual.write_bytes(contrast.expected)
+    assert CliRunner().invoke(app, ["verify", str(expected), str(actual)]).exit_code == 1

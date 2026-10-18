@@ -12,7 +12,6 @@ from es8ctl.capture import record
 from es8ctl.codec import (
     BULK_DATA_LEN,
     BULK_LAST_COUNTER,
-    SPEC_LAST_COUNTER,
     build_es8_bulk_frame,
     build_frame,
 )
@@ -113,23 +112,23 @@ def _bulk(counter):
     return FakeMsg("sysex", build_es8_bulk_frame(counter, bytes(BULK_DATA_LEN))[1:-1])
 
 
-def test_auto_stop_after_tail_following_last_frame(tmp_path, monkeypatch):
-    """Après la dernière trame observée (0C 4E), la capture attend `tail_s`
-    une éventuelle trame 0C 4F, puis s'arrête seule."""
-    script = [_bulk(BULK_LAST_COUNTER - 1), _bulk(BULK_LAST_COUNTER)]
+def test_auto_stop_after_tail_if_last_frame_missing(tmp_path, monkeypatch):
+    """Si la dernière trame (0C 4F) n'arrive pas, la capture s'arrête
+    `tail_s` après l'avant-dernière."""
+    script = [_bulk(BULK_LAST_COUNTER - 2), _bulk(BULK_LAST_COUNTER - 1)]
     monkeypatch.setattr(mido, "open_input", lambda port: FakeInput(script))
     progress = []
 
     result = record("fake", tmp_path, tail_s=0.05, on_frame=lambda n, c: progress.append((n, c)))
 
     assert result.frame_count == 2
-    assert progress == [(1, BULK_LAST_COUNTER - 1), (2, BULK_LAST_COUNTER)]
+    assert progress == [(1, BULK_LAST_COUNTER - 2), (2, BULK_LAST_COUNTER - 1)]
 
 
-def test_spec_last_frame_is_captured_and_stops(tmp_path, monkeypatch):
-    """Si la trame 0C 4F de la spec arrive, elle est gardée et la capture
-    s'arrête aussitôt : la suite du script (qui ferait échouer) n'est pas lue."""
-    script = [_bulk(BULK_LAST_COUNTER), _bulk(SPEC_LAST_COUNTER), RuntimeError("lu trop loin")]
+def test_last_frame_stops_at_once(tmp_path, monkeypatch):
+    """À la trame 0C 4F, la capture s'arrête aussitôt : la suite du script
+    (qui ferait échouer le test) n'est jamais lue."""
+    script = [_bulk(BULK_LAST_COUNTER - 1), _bulk(BULK_LAST_COUNTER), RuntimeError("lu trop loin")]
     monkeypatch.setattr(mido, "open_input", lambda port: FakeInput(script))
 
     result = record("fake", tmp_path, tail_s=10)

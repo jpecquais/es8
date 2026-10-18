@@ -6,10 +6,11 @@ minimal entre deux messages.
 
 Rythme : les deux messages d'une page partent à `interval_s` d'écart (la
 spec exige ≥ 50 ms et un envoi « consécutif » de la page), puis une pause
-`page_gap_s` précède la page suivante. Constat sur l'ES-8 via un WIDI
-(Bluetooth) : une page isolée passe toujours ; 45 pages à 300 ms entre
-chaque message (moitiés comprises) n'ont rien donné ; à 60 ms continus,
-5 pages sur 50. Écarter les moitiés d'une page semble la faire rejeter.
+`page_gap_s` précède la page suivante (0,5 s validé sur 44 pages via WIDI).
+
+Précondition côté appareil (apply.DEVICE_PRECONDITION) : l'ES-8 ignore tout
+bulk dump reçu tant qu'il est sur l'écran Utility > Bulk Dump. Aucun
+message d'erreur : seule la vérification par re-dump le révèle.
 """
 
 from __future__ import annotations

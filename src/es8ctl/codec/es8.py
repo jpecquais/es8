@@ -22,7 +22,7 @@ Organisation d'un dump complet (dumps différentiels du 2026-10-17) :
 - compteurs 0–15 : bloc système (16 trames) ;
 - compteurs 16+2k et 17+2k : patch k (0-indexé, 0-1 = k 0, 99-8 = k 799 ; banques numérotées
   à partir de 0, comme sur l'écran de l'ES-8 et dans la spec Roland).
-  Un dump observé s'arrête au compteur 1614 : le patch 99-8 n'y a que sa
+  Les premières captures s'arrêtaient au compteur 1614 : le patch 99-8 n'y a que sa
   première trame (question ouverte).
 
 Encodage d'une page (spec Roland « ES-8 Bulk Dump Messages ») : 250 octets
@@ -74,8 +74,9 @@ PATCH_NAME_CHAR_BITS = 7
 SYSTEM_FIRST_COUNTER = 0
 SYSTEM_FRAMES = 16
 PATCH_FIRST_COUNTER = SYSTEM_FIRST_COUNTER + SYSTEM_FRAMES
-BULK_LAST_COUNTER = 1614  # dernière trame reçue sur toutes les captures (0C 4E)
-SPEC_LAST_COUNTER = 1615  # dernière trame selon la spec Roland (0C 4F), jamais reçue
+# Dernière trame d'un dump complet (0C 4F, patch 99-8 seconde moitié), conforme
+# à la spec. Les premières captures s'arrêtaient à 0C 4E (Ctrl-C ou arrêt trop tôt).
+BULK_LAST_COUNTER = 1615
 
 
 @dataclass(frozen=True)

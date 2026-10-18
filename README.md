@@ -9,8 +9,8 @@ et la séquence de travail.
 écriture vérifiée sur l'appareil. Étape 3 : transformations en masse
 (`es8ctl transform`), les trois cas d'usage cibles passent en une commande.
 Import / export `.bel` (format de l'éditeur officiel). **En cours :**
-fiabiliser l'écriture de nombreuses pages via Bluetooth MIDI (WIDI) —
-voir « Prochaine session matériel » dans `docs/bulk-format.md`.
+écrire les transformations en masse sur l'appareil — voir « Prochaine
+session matériel » dans `docs/bulk-format.md`.
 
 ## Installation
 
@@ -114,6 +114,10 @@ d'écraser un patch non vierge sans `--overwrite`.
 
 ## Écrire vers l'ES-8
 
+**Précondition : l'ES-8 doit être sur l'écran de jeu.** Après un dump
+déclenché au panneau, il reste sur l'écran Bulk Dump, où il ignore sans
+erreur tout ce qu'il reçoit : quitter cet écran (EXIT) avant d'écrire.
+
 Règles : simulation par défaut ; `--write` explicite ; sauvegarde horodatée
 du dump de base avant tout envoi (`backups/`, jamais écrasée) ; seules les
 pages modifiées sont envoyées, 60 ms entre messages (spec : ≥ 50 ms) ;
@@ -140,7 +144,7 @@ vérification par re-dump.
 
    Codes de sortie : 0 succès, 2 changements ou base invalides, 3 écriture
    interrompue (partielle). Rythme : `--interval` entre les deux messages
-   d'une page (défaut 60 ms), `--page-gap` entre deux pages (défaut 1 s).
+   d'une page (défaut 60 ms), `--page-gap` entre deux pages (défaut 0,5 s).
 
 4. Re-dumper et vérifier (code 0 si conforme) :
 

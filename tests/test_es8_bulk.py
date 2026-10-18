@@ -50,7 +50,7 @@ def test_counter_sequence_complete_no_gaps(frames):
     # commence au premier patch.
     counters = [parse_es8_bulk_frame(f).counter for f in frames]
     assert counters[0] == PATCH_FIRST_COUNTER
-    assert counters[-1] == BULK_LAST_COUNTER
+    assert counters[-1] == BULK_LAST_COUNTER - 1  # capture arrêtée avant 0C 4F
     assert all(b - a == 1 for a, b in zip(counters, counters[1:]))
 
 

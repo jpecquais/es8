@@ -19,7 +19,7 @@ from .codec import BULK_LAST_COUNTER, CodecError, parse_patch_label, patch_label
 from .diff import diff_files, load_dump
 from .patch import FIRMWARE, SCHEMA_VERSION, decode_patch, out_of_range
 from .system import decode_system, system_out_of_range
-from .apply import DEFAULT_INTERVAL_S, DEFAULT_PAGE_GAP_S, check_changes, plan_changes
+from .apply import DEFAULT_INTERVAL_S, DEFAULT_PAGE_GAP_S, DEVICE_PRECONDITION, check_changes, plan_changes
 from . import transform as tf
 from .routing import render as render_chain
 from .codec import split_frames
@@ -361,7 +361,8 @@ def apply(
         _print_json({**report, "note": "Aucun changement effectif : rien à envoyer."})
         return
     if not write:
-        _print_json({**report, "note": "Simulation : rien n'a été envoyé. Ajouter --write --port <port>."})
+        _print_json({**report, "note": "Simulation : rien n'a été envoyé. Ajouter --write --port <port>.",
+                     "precondition": DEVICE_PRECONDITION})
         return
 
     from .transfer import list_output_ports, send_frames
@@ -372,6 +373,8 @@ def apply(
               port=port, available=outputs)
     report["port"] = port
     report["backup"] = str(_backup(base, backup_dir))
+    report["precondition"] = DEVICE_PRECONDITION
+    typer.echo(f"Rappel : {DEVICE_PRECONDITION}", err=True)
     sent = 0
 
     def progress(n: int, total: int) -> None:
@@ -406,8 +409,19 @@ def verify(
     except (CodecError, ValueError) as exc:
         _fail(2, error=str(exc))
     missing = result["coverage"]["only_in_a"]
-    match = not result["changed"] and not missing
-    _print_json({"match": match, **result})
+    notes = []
+    system_ok = not result["system"].get("changes")
+    if not system_ok:
+        # current_num = patch sélectionné : change dès qu'on navigue, ce n'est
+        # pas de la configuration. Seuls les autres champs comptent.
+        before, after = (decode_system(load_dump(p).system) for p in (expected, actual))
+        fields = sorted(k for k in before if before[k] != after[k])
+        result["system"]["changed_fields"] = fields
+        if fields == ["current_num"]:
+            system_ok = True
+            notes.append(f"current_num ignoré ({before['current_num']} → {after['current_num']}) : patch sélectionné.")
+    match = not result["patches"] and system_ok and not missing
+    _print_json({"match": match, "notes": notes, **result})
     if not match:
         raise typer.Exit(code=1)
 

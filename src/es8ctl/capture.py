@@ -15,7 +15,6 @@ from typing import Callable
 
 from .codec import (
     BULK_LAST_COUNTER,
-    SPEC_LAST_COUNTER,
     CodecError,
     is_es8_bulk_frame,
     parse_es8_bulk_frame,
@@ -104,11 +103,9 @@ def record(
     dans `ignored_count`. Chaque trame est écrite dans le `.syx` dès sa
     réception : un arrêt brutal (crash, Ctrl-C) ne perd jamais ce qui a
     déjà été reçu. Se termine sur KeyboardInterrupt (Ctrl-C), après
-    `timeout_s` secondes si fourni, ou — si `auto_stop` — `tail_s` secondes
-    après la dernière trame observée d'un bulk dump (compteur
-    BULK_LAST_COUNTER = 0C 4E). La spec annonce une trame de plus (0C 4F)
-    que les captures n'ont jamais reçue : si elle arrive pendant ce délai,
-    elle est enregistrée et la capture s'arrête aussitôt.
+    `timeout_s` secondes si fourni, ou — si `auto_stop` — à la dernière trame
+    d'un bulk dump (compteur BULK_LAST_COUNTER = 0C 4F). Si l'avant-dernière
+    arrive mais pas la dernière, la capture s'arrête `tail_s` secondes après.
     L'ES-8 peut marquer une pause de plusieurs minutes en cours de dump :
     aucun délai d'inactivité n'arrête donc la capture.
 
@@ -143,9 +140,9 @@ def record(
                         if on_frame is not None:
                             on_frame(len(frames), counter)
                         if auto_stop and counter is not None:
-                            if counter >= SPEC_LAST_COUNTER:
+                            if counter >= BULK_LAST_COUNTER:
                                 break
-                            if counter == BULK_LAST_COUNTER:
+                            if counter == BULK_LAST_COUNTER - 1:
                                 tail_deadline = time.monotonic() + tail_s
                     else:
                         ignored += 1

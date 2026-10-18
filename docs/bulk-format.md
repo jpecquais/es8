@@ -107,30 +107,32 @@ Via un CME WIDI Jack (Bluetooth MIDI) branché sur l'ES-8 : une seule page
 enregistrée. L'ES-8 accepte donc une page isolée, sans dump complet. Via le
 MIDISPORT Uno, rien n'atteignait l'ES-8, pas même un Program Change.
 
-### Écriture de nombreuses pages via WIDI (2026-10-18)
+### Écriture de nombreuses pages (2026-10-18)
 
-| Envoi | Rythme | Résultat (vérifié par dump) |
+**L'ES-8 ignore tout bulk dump reçu tant qu'il est sur l'écran Utility >
+Bulk Dump**, où il reste après un dump déclenché au panneau. Aucune erreur
+n'est signalée. Tous les échecs d'écriture via le WIDI s'expliquent ainsi :
+
+| Envoi | État de l'ES-8 | Résultat (vérifié par dump) |
 |---|---|---|
-| 1 page (49-1, puis 10-3) | 60 ms entre les 2 moitiés | OK, 2 fois sur 2 |
-| 50 pages (variantes 10-1…16-2) | 60 ms entre tous les messages | 5 / 50 (10-1, 10-2, 10-5…10-7), puis plus rien ; entrée WIDI muette ensuite jusqu'à reconnexion |
-| 45 pages restantes | 300 ms entre tous les messages | 0 / 45 |
+| 1 page (49-1) | écran de jeu | ✅ |
+| 50 pages, 60 ms continus | juste après un dump | 5 / 50 |
+| 45 pages, 300 ms continus | juste après un dump | 0 / 45 |
+| 1 page (10-3) | écran de jeu (l'utilisateur venait de naviguer) | ✅ |
+| 3 lots, pause 1,0 / 0,5 / 0,2 s entre pages | juste après un dump | 0 / 44 (×2, liaison vérifiée avant/après) |
+| 44 pages, précédées de 2 Program Change | juste après un dump | 0 / 44 (les PC ne quittent pas l'écran) |
+| 5 pages, une par `apply` | juste après un dump | 0 / 5 |
+| **44 pages, pause 0,5 s** | **écran de jeu (EXIT à la main)** | **✅** |
 
-Hypothèse : l'ES-8 rejette une page dont les deux moitiés sont trop
-espacées (la spec exige un envoi « consécutif »), et le WIDI sature sur un
-flux continu. D'où le rythme par page de `transfer.py` (`--interval` entre
-moitiés, `--page-gap` entre pages). Expérience lancée, à vérifier par dump
-(journal : `captures/experiment_pacing_20261018.json`) :
+Rythme retenu : 60 ms entre les deux moitiés d'une page, 0,5 s entre pages
+(défauts de `apply`). Un rythme plus rapide reste à tester sur l'écran de jeu.
 
-| Lot | Patchs | `--page-gap` |
-|---|---|---|
-| 1 | 10-4, 10-8, 11-1…11-8 (10) | 1,0 s |
-| 2 | 12-1…13-8 (16) | 0,5 s |
-| 3 | 14-1…16-2 (18) | 0,2 s |
-
-Autres constats : l'ES-8 ne répond ni aux requêtes RQ1 (plusieurs formes
-essayées) ni à la requête d'identité universelle — c'est le WIDI qui répond
-à cette dernière (`F0 7E 7F 06 02 00 20 63 …`, constructeur CME). Pas de
-relecture possible sans déclencher le dump au panneau.
+Le WIDI répond lui-même à la requête d'identité universelle
+(`F0 7E 7F 06 02 00 20 63 …`, CME) : c'est un test de la liaison Bluetooth
+(Mac ↔ WIDI), pas de la prise DIN ni de l'ES-8. L'ES-8 ne répond ni à RQ1 ni
+à l'identité ; l'éditeur officiel sait pourtant lire l'appareil par MIDI
+(manuel : « patch parameters … are loaded automatically ») — la commande
+est à capturer en écoutant l'éditeur.
 
 ### Validation par un `.bel` de l'éditeur officiel
 
@@ -153,23 +155,21 @@ systématique par re-dump.
 
 ## Prochaine session matériel
 
-1. Déclencher un dump (`es8ctl capture --port "WIDI Jack Bluetooth"` lancé
-   avant), puis :
-   `for g in 1.0 0.5 0.2; do es8ctl check captures/changes_pacing_gap$g.json captures/<dump>.syx; done`
-   → fixe le `--page-gap` par défaut.
-2. Ce même dump dira si la trame 0C 4F existe : la capture attend désormais
-   3 s après 0C 4E.
-3. Basculer `Tempo Hold` dans les réglages système, dumper, `es8ctl diff`
+Toujours : lancer la capture avant le dump, et **quitter l'écran Bulk Dump
+avant d'écrire**.
+
+1. Basculer `Tempo Hold` dans les réglages système, dumper, `es8ctl diff`
    → position de `tempo_hold` (puis `LINK`, `MANUAL_NUMBER`).
-4. Une fois le rythme fixé : écrire les transformations en masse (tap
-   tempo partout, échange 6 ↔ 7) et vérifier avec `es8ctl check`.
+2. Écrire les transformations en masse (tap tempo partout, échange 6 ↔ 7)
+   et vérifier avec `es8ctl check`.
+3. Tester un rythme plus rapide (`--page-gap 0.2`) sur l'écran de jeu.
+4. Écouter l'éditeur officiel (Windows) pour trouver la commande de lecture
+   et l'édition en temps réel.
 
 ## Questions ouvertes
 
-1. **Dernière trame manquante.** La spec liste le message `0C 4F` (patch
-   99-8, seconde moitié) : le dump complet fait 1616 trames. Les captures
-   s'arrêtent toutes à `0C 4E`. Trame perdue par l'interface DIN ou par la
-   capture ? À tester en USB. En attendant, `capture` s'arrête sur `0C 4E`.
+1. ~~Dernière trame manquante~~ : résolu, un dump complet fait 1616 trames
+   (jusqu'à `0C 4F`) ; les premières captures s'arrêtaient trop tôt.
 2. Position de `manual_number1-8`, `tempo_hold`, `link` dans la page système 1.
 3. Comportement de l'ES-8 à la réception d'une seule page (écriture
    partielle) : à vérifier au premier essai d'écriture.
