@@ -1,4 +1,4 @@
-"""CLI es8ctl : devices · capture · inspect · diff · patches · system · transform · apply · verify · check · export-bel · import-bel · sniff · read · patch (select, rename, copy, exchange, init).
+"""CLI es8ctl : devices · capture · inspect · diff · patches · system · transform · apply · verify · check · export-bel · import-bel · sniff · read · patch (select, rename, copy, exchange, init) · web.
 
 Sortie JSON machine-first par défaut. Seule `apply --write` émet vers l'ES-8,
 après validation complète et sauvegarde horodatée du dump de base.
@@ -759,6 +759,66 @@ def patch_init(patch: str = typer.Argument(...), port: str = _PORT, port_in: str
                write: bool = _WRITE, backup_dir: Path = _BACKUPS) -> None:
     """Réinitialise un patch (réglages d'usine, nom vide)."""
     _live("initialize", patch, port=port, port_in=port_in, write=write, backup_dir=backup_dir)
+
+
+def library_zip() -> bytes:
+    """La bibliothèque es8ctl (sources .py) en zip, pour Pyodide dans le navigateur."""
+    import io
+    import zipfile
+
+    root = Path(__file__).resolve().parent
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        for path in sorted(root.rglob("*.py")):
+            if "__pycache__" not in path.parts:
+                archive.write(path, Path("es8ctl") / path.relative_to(root))
+    return buffer.getvalue()
+
+
+@app.command()
+def web(
+    port: int = typer.Option(8765, "--port", help="Port HTTP local."),
+    open_browser: bool = typer.Option(True, "--open/--no-open", help="Ouvrir le navigateur."),
+) -> None:
+    """Lance l'interface web en local (Chrome / Edge : Web MIDI). Ctrl-C pour arrêter."""
+    import functools
+    import http.server
+    import webbrowser
+
+    web_dir = Path(__file__).resolve().parent / "web"
+    archive = library_zip()
+
+    class Handler(http.server.SimpleHTTPRequestHandler):
+        def do_GET(self):  # noqa: N802 (API http.server)
+            if self.path.split("?")[0] == "/es8ctl.zip":
+                self.send_response(200)
+                self.send_header("Content-Type", "application/zip")
+                self.send_header("Content-Length", str(len(archive)))
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                self.wfile.write(archive)
+                return
+            super().do_GET()
+
+        def end_headers(self):
+            self.send_header("Cache-Control", "no-store")
+            super().end_headers()
+
+        def log_message(self, *args):
+            pass
+
+    handler = functools.partial(Handler, directory=str(web_dir))
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", port), handler)
+    url = f"http://localhost:{port}/"
+    typer.echo(f"Interface web : {url}  (Chrome ou Edge ; Ctrl-C pour arrêter)", err=True)
+    if open_browser:
+        webbrowser.open(url)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        server.server_close()
 
 
 def main() -> None:

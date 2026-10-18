@@ -23,16 +23,9 @@ Ce module n'envoie que des requêtes de lecture et la bascule du mode
 
 from __future__ import annotations
 
-import time
 from typing import Callable
 
-from .codec import (
-    BULK_LAST_COUNTER,
-    PATCH_FIRST_COUNTER,
-    PATCH_FRAMES,
-    is_es8_bulk_frame,
-    parse_es8_bulk_frame,
-)
+from .codec import BULK_LAST_COUNTER, PATCH_FIRST_COUNTER, PATCH_FRAMES
 from .codec.roland import CMD_DT1, CMD_RQ1, checksum
 
 MODEL = (0x00, 0x00, 0x00, 0x14)
@@ -90,61 +83,25 @@ def read_pages(
     retries: int = DEFAULT_RETRIES,
     on_progress: Callable[[int, int], None] | None = None,
 ) -> tuple[dict[int, bytes], list[int]]:
-    """Lit des pages ; rend (trames par ID de message, pages restées incomplètes)."""
+    """Lit des pages par ports mido ; rend (trames par ID, pages incomplètes).
+
+    Enveloppe synchrone de `session.read_pages_async` (même logique que le navigateur).
+    """
+    import asyncio
+
     import mido
 
-    wanted = {mid for page in pages for mid in range(page_ids(page)[0], page_ids(page)[1] + 1)}
-    frames: dict[int, bytes] = {}
-
-    def missing_pages() -> list[int]:
-        return sorted({mid // PATCH_FRAMES for mid in wanted - frames.keys()})
+    from .session import MidoTransport, read_pages_async
 
     with mido.open_input(in_port) as inp, mido.open_output(out_port) as out:
         for _ in inp.iter_pending():
             pass
-
-        def send(raw: bytes) -> None:
-            out.send(mido.Message.from_bytes(raw))
-
-        def collect(expected: set[int]) -> None:
-            last = time.monotonic()
-            while expected - frames.keys() and time.monotonic() - last < idle_s:
-                msg = inp.poll()
-                if msg is None:
-                    time.sleep(0.002)
-                    continue
-                raw = bytes(msg.bytes())
-                if len(raw) == 155 and is_es8_bulk_frame(raw):  # échos et autres messages ignorés
-                    frame = parse_es8_bulk_frame(raw)  # ChecksumError : trame rejetée
-                    if frame.counter in wanted:
-                        is_new = frame.counter not in frames
-                        frames[frame.counter] = raw
-                        last = time.monotonic()
-                        if is_new and on_progress is not None:
-                            on_progress(len(frames), len(wanted))
-
-        send(editor_mode_message(True))
-        time.sleep(0.3)
-        try:
-            system = [p for p in pages if p * PATCH_FRAMES <= SYSTEM_LAST_ID]
-            plan = ([sorted(set(system))] if system else []) + _chunks(
-                [p for p in pages if p not in system], chunk_pages
+        return asyncio.run(
+            read_pages_async(
+                MidoTransport(inp, out), pages, chunk_pages=chunk_pages, idle_s=idle_s,
+                retries=retries, on_progress=on_progress,
             )
-            for attempt in range(retries + 1):
-                for block in plan:
-                    first, last = page_ids(block[0])[0], page_ids(block[-1])[1]
-                    if first <= SYSTEM_LAST_ID:
-                        first, last = SYSTEM_REQUEST[0], max(last, SYSTEM_REQUEST[1])
-                    send(request_message(first, last))
-                    collect(set(range(first, last + 1)) & wanted)
-                missing = missing_pages()  # nouvelle tentative : page par page (système d'un bloc)
-                sys_missing = [p for p in missing if p * PATCH_FRAMES <= SYSTEM_LAST_ID]
-                plan = ([sys_missing] if sys_missing else []) + [[p] for p in missing if p not in sys_missing]
-                if not plan:
-                    break
-        finally:
-            send(editor_mode_message(False))
-    return frames, missing_pages()
+        )
 
 
 def frames_to_syx(frames: dict[int, bytes]) -> bytes:

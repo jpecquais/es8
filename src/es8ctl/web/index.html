@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>es8ctl</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/pyodide/v0.27.7/full/pyodide.js"></script>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <strong>es8ctl</strong>
+      <span class="sub">éditeur libre pour ES-8</span>
+    </div>
+    <div class="toolbar">
+      <label>Sortie <select id="midi-out" disabled></select></label>
+      <label>Entrée <select id="midi-in" disabled></select></label>
+      <button id="btn-read" disabled>Lire l'appareil</button>
+      <label class="button">Ouvrir un .syx<input id="file-syx" type="file" accept=".syx" hidden></label>
+      <button id="btn-save" disabled>Enregistrer .syx</button>
+    </div>
+  </header>
+
+  <div id="status-bar">
+    <span id="status">Chargement du moteur Python…</span>
+    <progress id="progress" max="1" value="0" hidden></progress>
+  </div>
+
+  <main>
+    <section id="banks">
+      <div class="banks-head">
+        <input id="filter" type="search" placeholder="Filtrer par nom…" disabled>
+        <span id="source"></span>
+      </div>
+      <div id="grid" class="grid empty">
+        <p class="hint">Lisez l'appareil ou ouvrez un fichier .syx.</p>
+      </div>
+    </section>
+
+    <section id="detail" class="empty">
+      <p class="hint">Sélectionnez un patch.</p>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

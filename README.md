@@ -17,6 +17,18 @@ import / export `.bel`. Reste : la GUI (étape 5). Détails :
 uv sync
 ```
 
+## Interface web
+
+```sh
+es8ctl web          # ouvre http://localhost:8765 (Chrome, Edge ou Opera)
+```
+
+Le navigateur parle à l'ES-8 par Web MIDI ; la logique est la même
+bibliothèque Python, exécutée dans la page par Pyodide (rien n'est envoyé à
+un serveur). Version actuelle : lecture de l'appareil ou d'un `.syx`, grille
+des 800 patchs, fiche détaillée (chaîne, loops, assigns, MIDI). Accepter
+l'accès MIDI « avec SysEx » demandé par le navigateur.
+
 ## Lire l'ES-8
 
 ```sh
@@ -79,7 +91,7 @@ panneau) reste disponible.
 
 ```
 src/es8ctl/
-  cli.py          # typer : devices · capture · inspect · diff · patches · system · transform · apply · verify · check · export-bel · import-bel · sniff · read · patch
+  cli.py          # typer : devices · capture · inspect · diff · patches · system · transform · apply · verify · check · export-bel · import-bel · sniff · read · patch · web
   capture.py      # écoute MIDI, enregistrement, sidecar JSON
   diff.py         # comparaison de dumps (système, patchs bit à bit)
   layout.py       # champs empaquetés au bit ↔ JSON (mécanique commune)
@@ -92,6 +104,9 @@ src/es8ctl/
   sniff.py        # relais enregistreur éditeur officiel ⇄ ES-8
   request.py      # lecture à distance (RQ1, mode éditeur)
   live.py         # commandes directes (sélection, renommage, copie, échange, init.)
+  session.py      # dialogue avec l'ES-8 indépendant du transport (mido / Web MIDI)
+  webapp.py       # pont navigateur (Pyodide) ↔ bibliothèque
+  web/            # interface web : index.html, app.js (Web MIDI + affichage), style.css
   apply.py        # changements JSON → pages → trames (validation, sans MIDI)
   transfer.py     # envoi MIDI vers l'ES-8 (seul module émetteur)
   codec/

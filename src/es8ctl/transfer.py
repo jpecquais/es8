@@ -19,9 +19,8 @@ import time
 from typing import Callable
 
 from .apply import DEFAULT_INTERVAL_S, DEFAULT_PAGE_GAP_S
-from .codec import PATCH_FRAMES
 
-MIN_INTERVAL_S = 0.05  # spec Roland
+from .session import MIN_INTERVAL_S  # noqa: F401  (spec Roland, réexporté)
 
 
 def list_output_ports() -> list[str]:
@@ -39,25 +38,24 @@ def send_frames(
 ) -> int:
     """Envoie les trames dans l'ordre ; rend le nombre de trames envoyées.
 
-    Une interruption (Ctrl-C, erreur) en cours d'envoi remonte telle quelle :
-    l'appelant doit signaler que l'écriture est partielle.
+    Enveloppe synchrone de `session.send_frames_async` (même rythme que le
+    navigateur). Une interruption remonte telle quelle : l'appelant doit
+    signaler que l'écriture est partielle.
     """
-    if interval_s < MIN_INTERVAL_S or page_gap_s < MIN_INTERVAL_S:
-        raise ValueError(f"Délai < {MIN_INTERVAL_S} s exigé par la spec Roland.")
-    if len(frames) % PATCH_FRAMES:
-        raise ValueError("Nombre de trames impair : une page incomplète serait rejetée.")
+    import asyncio
+
     import mido
 
-    sent = 0
+    from .session import MidoTransport, send_frames_async
+
+    async def pause(seconds: float) -> None:
+        time.sleep(seconds)  # synchrone : rythme exact, et remplaçable en test
+
     with mido.open_output(port) as out:
-        for frame in frames:
-            if sent:
-                time.sleep(page_gap_s if sent % PATCH_FRAMES == 0 else interval_s)
-            out.send(mido.Message("sysex", data=frame[1:-1]))
-            sent += 1
-            if on_frame is not None:
-                on_frame(sent, len(frames))
-    return sent
+        return asyncio.run(
+            send_frames_async(MidoTransport(None, out), frames, interval_s, page_gap_s,
+                              on_frame=on_frame, sleep=pause)
+        )
 
 
 def _fix_mojibake(name: str) -> str:
