@@ -224,7 +224,7 @@ input[type="number"] { width: 76px; font-family: var(--font-mono); }
 .sw[aria-pressed="true"] { border-color: var(--pending); box-shadow: 0 0 0 2px var(--pending-soft); }
 .sw.dirty { box-shadow: inset 0 0 0 2px var(--pending); }
 .sw .slot { display: flex; align-items: center; gap: 6px; font: 600 11px/1 var(--font-display); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
-.sw .fn { font-weight: 600; line-height: 1.15; }
+.sw .fn { font-weight: 600; line-height: 1.15; overflow-wrap: anywhere; }
 .sw .fn.default { color: var(--muted); font-weight: 500; }
 .sw .tag { padding: 3px 5px; border-radius: 4px; background: var(--led-soft); font-size: 11px; line-height: 1.25; }
 .custom { width: 6px; height: 6px; border-radius: 50%; background: var(--led); }
@@ -331,6 +331,7 @@ button.gh:hover { color: var(--pending); }
 
 /* ---------------------------------------------------------------- écrans étroits */
 @media (max-width: 1100px) {
+  .tray-list .empty, .tray-h small { display: none; }
   .body { grid-template-columns: 210px minmax(0, 1fr); }
   .tray { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--line); max-height: 40vh; }
   .app { grid-template-rows: auto minmax(0, 1fr); }
