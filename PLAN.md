@@ -7,9 +7,10 @@ apportées par la recherche initiale, et la séquence de travail.
 ## 1. Décisions actées
 
 - **Langage : Python** (≥ 3.11).
-- **Transport : USB d'abord.** L'ES-8 a un port USB MIDI class-compliant et
-  l'éditeur officiel communique en duplex SysEx sur USB. Le DIN via interface
-  reste un backend du transport, pas le chemin par défaut.
+- **Transport : MIDI DIN via interface USB-MIDI.** *(Corrigé le 2026-10-17 :
+  l'ES-8 n'a pas de port USB ; l'hypothèse initiale « USB d'abord » était
+  fausse.)* Interface actuelle : M-Audio MIDISPORT Uno — réception OK mais
+  pertes d'octets occasionnelles, émission non fonctionnelle à ce jour.
 - **Offline avant temps réel.** Le palier offline (dump → éditer → restore) ne
   dépend d'aucun reverse-engineering. La carte d'adresses temps réel est un
   travail parallèle (phase 0), jamais un prérequis.
@@ -20,7 +21,7 @@ apportées par la recherche initiale, et la séquence de travail.
 | Hypothèse initiale | Correction (recherche 2026-10-17) |
 |---|---|
 | Bulk dump demandé par le CLI (RQ1 hôte) | À vérifier dès la session hardware n°1 : la procédure officielle suggère que le dump est **initié au panneau de l'ES-8**. Si confirmé, `dump` = mode écoute et le diagramme de séquence change. |
-| Transport = DIN vers interface | USB class-compliant probablement plus rapide et sans matériel additionnel. DIN en second backend. |
+| Transport = DIN vers interface | Confirmé : l'ES-8 n'a pas d'USB, le DIN via interface est le seul transport. |
 | `.bel` partiellement cartographié | Confirmé : `es8-bulk-editor` (qckpckt) ne touche jamais le MIDI, ne traite que des `.bel` (mapping surtout sur les assigns ; projet quasi inactif). Utilisable comme **oracle sémantique**, pas comme base de code. |
 | Carte d'adresses temps réel | Aucune carte publiée n'existe. Le RE (phase 0) est réellement nécessaire. |
 

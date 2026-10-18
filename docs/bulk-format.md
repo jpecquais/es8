@@ -3,7 +3,7 @@
 État au 2026-10-17. Fixtures (capture DIN via M-Audio MIDISPORT Uno) :
 
 - `es8_bulk_session1.syx` : compteurs 16–1614, sans bloc système.
-- `es8_bulk_session2_name_A.syx` : compteurs 0–1614, patch 1-1 renommé
+- `es8_bulk_session2_name_A.syx` : compteurs 0–1614, patch 0-1 (le premier) renommé
   `AAAAAAAAAAAAAAAA`, tout le reste identique.
 
 ## Établi
@@ -12,9 +12,10 @@
 
 - Trame : `F0 41 00 00 00 00 14 12 <ctr_hi> <ctr_lo> <143 octets> <checksum> F7`.
 - Compteurs 0–15 : **bloc système** (16 trames, 2288 octets MIDI).
-- Compteurs 16+2k et 17+2k : **patch k** (1-1 = k 0, banque-numéro = k÷8+1 – k mod 8+1).
-  Confirmé : renommer 1-1 ne modifie que la trame 16.
-- Le dump s'arrête au compteur 1614 : le patch 100-8 n'a que sa première trame.
+- Compteurs 16+2k et 17+2k : **patch k** (0-1 = k 0, banque-numéro = k÷8 – k mod 8+1 ; banques
+  numérotées à partir de 0, comme sur l'écran de l'ES-8 et dans la spec).
+  Confirmé : renommer 0-1 ne modifie que la trame 16.
+- Le dump s'arrête au compteur 1614 : le patch 99-8 n'a que sa première trame.
 
 ### Encodage d'une page (2 × 143 octets MIDI → 250 octets de données)
 
@@ -88,14 +89,32 @@ D'après la spec : les deux messages d'une page doivent être envoyés à la
 suite, dans l'ordre ; un message seul est invalide ; **au moins 50 ms entre
 deux messages**. Des données incohérentes peuvent faire dysfonctionner l'ES-8.
 
+### Premier essai d'écriture (2026-10-18)
+
+Via un CME WIDI Jack (Bluetooth MIDI) branché sur l'ES-8 : une seule page
+(patch 49-1, nom + BPM) envoyée par `es8ctl apply --write` est acceptée et
+enregistrée. L'ES-8 accepte donc une page isolée, sans dump complet. Via le
+MIDISPORT Uno, rien n'atteignait l'ES-8, pas même un Program Change.
+
+### Fiabilité de la liaison DIN (MIDISPORT Uno)
+
+Le dump 4 (`dump_20261017_195509`) contient une trame de 152 octets au lieu
+de 155 (compteur 1393, 3 octets perdus) : le checksum l'a détectée. Avec les
+pauses de plusieurs minutes en cours de dump, c'est un argument pour l'USB.
+À l'écriture, une trame corrompue en route peut être rejetée par l'ES-8 —
+ou, avec une faible probabilité, passer le checksum : d'où la vérification
+systématique par re-dump.
+
 ## Questions ouvertes
 
 1. **Dernière trame manquante.** La spec liste le message `0C 4F` (patch
-   100-8, seconde moitié) : le dump complet fait 1616 trames. Les captures
+   99-8, seconde moitié) : le dump complet fait 1616 trames. Les captures
    s'arrêtent toutes à `0C 4E`. Trame perdue par l'interface DIN ou par la
    capture ? À tester en USB. En attendant, `capture` s'arrête sur `0C 4E`.
 2. Position de `manual_number1-8`, `tempo_hold`, `link` dans la page système 1.
-3. Confirmer par dump les champs `inferred` (`mixer_*`, `midi_clock_out`,
+3. Comportement de l'ES-8 à la réception d'une seule page (écriture
+   partielle) : à vérifier au premier essai d'écriture.
+4. Confirmer par dump les champs `inferred` (`mixer_*`, `midi_clock_out`,
    `midi_transmit`, extension système v2) et le sens des marqueurs 10–15 de
    `loop_position`.
 
@@ -120,6 +139,6 @@ flux dépaqueté) avec leurs valeurs avant/après. Consigner chaque expérience
 
 Avec la spec officielle, les dumps différentiels ne servent plus qu'à
 confirmer les champs marqués `inferred` et les écarts v2 : réglage du mixer
-sur 1-1, MIDI clock out d'un patch, un réglage système (contraste LCD), sens
+sur 0-1, MIDI clock out d'un patch, un réglage système (contraste LCD), sens
 des marqueurs 10–15 de `loop_position`, position de `tempo_hold` (basculer
 le réglage, comparer le bloc système).

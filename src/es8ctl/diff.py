@@ -50,7 +50,7 @@ def _bit_runs(a: bytes, b: bytes) -> list[dict]:
 
 
 def _label_ranges(indices: list[int]) -> list[str]:
-    """Plages de patchs lisibles : [0, 1, 2, 5] → ["1-1..1-3", "1-6"]."""
+    """Plages de patchs lisibles : [0, 1, 2, 5] → ["0-1..0-3", "0-6"]."""
     ranges: list[list[int]] = []
     for index in sorted(indices):
         if ranges and index == ranges[-1][1] + 1:

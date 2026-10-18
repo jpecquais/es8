@@ -20,8 +20,9 @@ Structure d'une trame de bulk dump :
 Organisation d'un dump complet (dumps différentiels du 2026-10-17) :
 
 - compteurs 0–15 : bloc système (16 trames) ;
-- compteurs 16+2k et 17+2k : patch k (0-indexé, 1-1 = k 0, 100-8 = k 799).
-  Un dump observé s'arrête au compteur 1614 : le patch 100-8 n'y a que sa
+- compteurs 16+2k et 17+2k : patch k (0-indexé, 0-1 = k 0, 99-8 = k 799 ; banques numérotées
+  à partir de 0, comme sur l'écran de l'ES-8 et dans la spec Roland).
+  Un dump observé s'arrête au compteur 1614 : le patch 99-8 n'y a que sa
   première trame (question ouverte).
 
 Encodage d'une page (spec Roland « ES-8 Bulk Dump Messages ») : 250 octets
@@ -271,17 +272,17 @@ def patch_name(data: bytes) -> str:
 
 
 def patch_label(index: int) -> str:
-    """Numéro de patch tel qu'affiché par l'ES-8 : banque-numéro (1-1 … 100-8)."""
+    """Numéro de patch tel qu'affiché par l'ES-8 : banque-numéro (0-1 … 99-8)."""
     bank, number = divmod(index, PATCHES_PER_BANK)
-    return f"{bank + 1}-{number + 1}"
+    return f"{bank}-{number + 1}"
 
 
 def parse_patch_label(label: str) -> int:
-    """Inverse de patch_label : « 12-3 » → index 0-799. Lève CodecError si invalide."""
+    """Inverse de patch_label : « 12-3 » → index 99 (0-799). Lève CodecError si invalide."""
     try:
         bank, number = (int(part) for part in label.split("-"))
     except ValueError:
-        raise CodecError(f"Numéro de patch invalide : {label!r} (attendu banque-numéro, ex. 1-1).") from None
-    if not (1 <= bank <= PATCH_COUNT // PATCHES_PER_BANK and 1 <= number <= PATCHES_PER_BANK):
-        raise CodecError(f"Patch hors plage : {label!r} (1-1 … 100-8).")
-    return (bank - 1) * PATCHES_PER_BANK + number - 1
+        raise CodecError(f"Numéro de patch invalide : {label!r} (attendu banque-numéro, ex. 0-1).") from None
+    if not (0 <= bank < PATCH_COUNT // PATCHES_PER_BANK and 1 <= number <= PATCHES_PER_BANK):
+        raise CodecError(f"Patch hors plage : {label!r} (0-1 … 99-8).")
+    return bank * PATCHES_PER_BANK + number - 1

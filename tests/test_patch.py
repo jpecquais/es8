@@ -83,7 +83,7 @@ def test_factory_patch_matches_editor_defaults(dump1):
 
 
 def test_decode_user_patch(dump1):
-    patch = decode_patch(data(dump1, "1-8"))
+    patch = decode_patch(data(dump1, "0-8"))
     assert patch["name"] == "TEMPLATE        "
     assert patch["master_bpm"] == 76
     assert patch["loop_sw"] == [0, 0, 0, 1, 0, 1, 0, 0, 1]
@@ -91,7 +91,7 @@ def test_decode_user_patch(dump1):
 
 
 def test_decoded_patch_is_json_serializable(dump1):
-    json.dumps(decode_patch(data(dump1, "1-1")))
+    json.dumps(decode_patch(data(dump1, "0-1")))
 
 
 def test_loop_position_shape(all_patches):
@@ -107,7 +107,7 @@ def test_encode_decode_roundtrip_all_patches(all_patches):
 
 
 def test_encode_changes_only_target_fields(dump1):
-    original = data(dump1, "1-1")
+    original = data(dump1, "0-1")
     edited = encode_patch(original, {"master_bpm": 107, "name": "MY PATCH        "})
     before, after = decode_patch(original), decode_patch(edited)
     assert after["master_bpm"] == 107
@@ -133,11 +133,11 @@ def test_encode_changes_only_target_fields(dump1):
 )
 def test_encode_rejects_invalid_input(dump1, fields):
     with pytest.raises(CodecError):
-        encode_patch(data(dump1, "1-1"), fields)
+        encode_patch(data(dump1, "0-1"), fields)
 
 
 def test_parse_patch_label_roundtrip():
     assert all(parse_patch_label(patch_label(i)) == i for i in range(800))
-    for bad in ("0-1", "101-1", "1-9", "1", "a-b"):
+    for bad in ("100-1", "0-0", "0-9", "-1-1", "1", "a-b"):
         with pytest.raises(CodecError):
             parse_patch_label(bad)

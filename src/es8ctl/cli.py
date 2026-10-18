@@ -1,12 +1,15 @@
-"""CLI es8ctl : devices · capture · inspect · diff · patches · system.
+"""CLI es8ctl : devices · capture · inspect · diff · patches · system · apply · verify.
 
-Sortie JSON machine-first par défaut. Read-only : aucune de ces commandes
-n'émet quoi que ce soit vers l'ES-8.
+Sortie JSON machine-first par défaut. Seule `apply --write` émet vers l'ES-8,
+après validation complète et sauvegarde horodatée du dump de base.
 """
 
 from __future__ import annotations
 
 import json
+import shutil
+import sys
+from datetime import UTC, datetime
 from pathlib import Path
 
 import typer
@@ -16,6 +19,8 @@ from .codec import BULK_LAST_COUNTER, CodecError, parse_patch_label, patch_label
 from .diff import diff_files, load_dump
 from .patch import FIRMWARE, SCHEMA_VERSION, decode_patch, out_of_range
 from .system import decode_system, system_out_of_range
+from .apply import DEFAULT_INTERVAL_S, plan_changes
+from .codec import split_frames
 
 app = typer.Typer(
     add_completion=False,
@@ -44,8 +49,10 @@ def _progress(received: int, counter: int | None) -> None:
 
 @app.command()
 def devices() -> None:
-    """Liste les ports d'entrée MIDI disponibles."""
-    _print_json({"input_ports": list_ports()})
+    """Liste les ports MIDI d'entrée et de sortie disponibles."""
+    from .transfer import list_output_ports
+
+    _print_json({"input_ports": list_ports(), "output_ports": list_output_ports()})
 
 
 @app.command()
@@ -94,6 +101,11 @@ def capture(
 
     _print_json(_dump_result(result))
     if result.decode_errors:
+        typer.echo(
+            f"ATTENTION : {len(result.decode_errors)} trame(s) invalide(s) "
+            "(octets perdus en transit ?) — refaire le dump avant de s'en servir.",
+            err=True,
+        )
         raise typer.Exit(code=2)
 
 
@@ -138,7 +150,7 @@ def diff(
 def patches(
     syx: Path = typer.Argument(..., exists=True, readable=True, help="Bulk dump (.syx)."),
     patch: list[str] = typer.Option(
-        None, "--patch", "-p", help="Patch à sortir (ex. 1-1), répétable. Tous par défaut."
+        None, "--patch", "-p", help="Patch à sortir (ex. 0-1), répétable. Tous par défaut."
     ),
 ) -> None:
     """Décode les patchs d'un bulk dump en JSON (forme des clés et valeurs alignée sur le .bel)."""
@@ -198,6 +210,116 @@ def system(
     if warnings:
         payload["warnings"] = warnings
     _print_json(payload)
+
+
+def _fail(code: int, **payload) -> None:
+    typer.echo(json.dumps(payload, default=str))
+    raise typer.Exit(code=code)
+
+
+def _backup(base: Path, backup_dir: Path) -> Path:
+    """Copie horodatée du dump de base ; ne remplace jamais un fichier existant."""
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
+    target = backup_dir / f"backup_{stamp}_{base.name}"
+    with base.open("rb") as src, target.open("xb") as dst:  # « x » : échec si existe
+        shutil.copyfileobj(src, dst)
+    return target
+
+
+@app.command()
+def apply(
+    changes: Path = typer.Argument(..., help="Changements JSON (« - » pour stdin)."),
+    base: Path = typer.Option(
+        ..., "--base", "-b", exists=True, readable=True,
+        help="Dump frais de l'ES-8 (état actuel), base des modifications.",
+    ),
+    write: bool = typer.Option(False, "--write", help="Envoyer réellement à l'ES-8 (sinon simulation)."),
+    port: str = typer.Option(None, "--port", "-p", help="Port de sortie MIDI (requis avec --write)."),
+    expected_out: Path = typer.Option(
+        None, "--expected-out", help="Dump attendu après écriture (défaut : captures/expected_<horodatage>.syx)."
+    ),
+    backup_dir: Path = typer.Option(Path("backups"), "--backup-dir", help="Répertoire des sauvegardes."),
+    interval: float = typer.Option(
+        DEFAULT_INTERVAL_S, "--interval", help="Délai entre messages en secondes (≥ 0,05, spec Roland)."
+    ),
+) -> None:
+    """Applique des changements à l'ES-8. Simulation par défaut ; --write pour envoyer.
+
+    Codes de sortie : 0 succès, 2 changements ou base invalides, 3 écriture
+    interrompue (partielle).
+    """
+    try:
+        raw = sys.stdin.read() if str(changes) == "-" else changes.read_text(encoding="utf-8")
+        plan = plan_changes(list(split_frames(base.read_bytes())), json.loads(raw))
+    except (OSError, json.JSONDecodeError, CodecError, ValueError) as exc:
+        _fail(2, error=str(exc), base=str(base))
+
+    stamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
+    expected = expected_out or Path("captures") / f"expected_{stamp}.syx"
+    expected.parent.mkdir(parents=True, exist_ok=True)
+    expected.write_bytes(plan.expected)
+    report = {
+        "mode": "write" if write else "dry-run",
+        "base": str(base),
+        "changes": plan.changes,
+        "frames": len(plan.frames),
+        "estimated_s": round(plan.duration_s(interval), 1),
+        "expected": str(expected),
+    }
+    if not plan.frames:
+        _print_json({**report, "note": "Aucun changement effectif : rien à envoyer."})
+        return
+    if not write:
+        _print_json({**report, "note": "Simulation : rien n'a été envoyé. Ajouter --write --port <port>."})
+        return
+
+    from .transfer import list_output_ports, send_frames
+
+    outputs = list_output_ports()
+    if port is None or port not in outputs:
+        _fail(2, error="Port de sortie requis avec --write (voir es8ctl devices).",
+              port=port, available=outputs)
+    report["port"] = port
+    report["backup"] = str(_backup(base, backup_dir))
+    sent = 0
+
+    def progress(n: int, total: int) -> None:
+        nonlocal sent
+        sent = n
+        typer.echo(f"\r{n}/{total} message(s) envoyé(s)   ", err=True, nl=False)
+
+    try:
+        send_frames(port, plan.frames, interval_s=interval, on_frame=progress)
+    except (KeyboardInterrupt, Exception) as exc:  # écriture partielle : toujours signalée
+        typer.echo("", err=True)
+        _fail(3, **report, error=f"Écriture interrompue : {exc!r}", sent=sent)
+    typer.echo("", err=True)
+    _print_json({
+        **report,
+        "sent": sent,
+        "next_steps": [
+            "es8ctl capture  (puis déclencher le bulk dump au panneau)",
+            f"es8ctl verify {expected} captures/<nouveau dump>.syx",
+        ],
+    })
+
+
+@app.command()
+def verify(
+    expected: Path = typer.Argument(..., exists=True, readable=True, help="Dump attendu (apply)."),
+    actual: Path = typer.Argument(..., exists=True, readable=True, help="Dump capturé après écriture."),
+) -> None:
+    """Vérifie qu'un dump capturé correspond au dump attendu. Code 0 si conforme, 1 sinon."""
+    try:
+        result = diff_files(expected, actual)
+    except (CodecError, ValueError) as exc:
+        _fail(2, error=str(exc))
+    missing = result["coverage"]["only_in_a"]
+    match = not result["changed"] and not missing
+    _print_json({"match": match, **result})
+    if not match:
+        raise typer.Exit(code=1)
 
 
 def main() -> None:

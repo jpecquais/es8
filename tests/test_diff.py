@@ -2,7 +2,7 @@
 
 - session1 : dump sans bloc système (compteurs 16-1614), patchs de l'utilisateur.
 - session2_name_A : dump complet (compteurs 0-1614), identique à session1
-  sauf le nom du patch 1-1 renommé « AAAAAAAAAAAAAAAA » au panneau.
+  sauf le nom du patch 0-1 (le premier) renommé « AAAAAAAAAAAAAAAA » au panneau.
 """
 
 from pathlib import Path
@@ -46,7 +46,7 @@ def dump2():
 def test_split_without_system_block(dump1):
     assert dump1.system is None
     assert len(dump1.patches) == 799
-    assert dump1.incomplete == [799]  # 100-8 : seule la première trame est reçue
+    assert dump1.incomplete == [799]  # 99-8 : seule la première trame est reçue
 
 
 def test_split_with_system_block(dump2):
@@ -106,10 +106,12 @@ def test_frames_by_counter_rejects_duplicates():
 
 
 def test_patch_label():
-    assert patch_label(0) == "1-1"
-    assert patch_label(7) == "1-8"
-    assert patch_label(8) == "2-1"
-    assert patch_label(799) == "100-8"
+    # Banques numérotées à partir de 0, comme sur l'écran de l'ES-8.
+    assert patch_label(0) == "0-1"
+    assert patch_label(7) == "0-8"
+    assert patch_label(8) == "1-1"
+    assert patch_label(392) == "49-1"
+    assert patch_label(799) == "99-8"
 
 
 def test_diff_identical_fixture_is_empty():
@@ -119,10 +121,10 @@ def test_diff_identical_fixture_is_empty():
 
 
 def test_diff_rename_touches_only_name_bits():
-    """Expérience différentielle n°1 : renommer 1-1 ne change que les bits du nom."""
+    """Expérience différentielle n°1 : renommer 0-1 ne change que les bits du nom."""
     result = diff_files(SESSION1, NAME_A)
     assert result["system"]["compared"] is False  # session1 n'a pas de bloc système
-    assert [p["patch"] for p in result["patches"]] == ["1-1"]
+    assert [p["patch"] for p in result["patches"]] == ["0-1"]
     patch = result["patches"][0]
     assert patch["name"] == {"old": "BOSS ES-8       ", "new": "AAAAAAAAAAAAAAAA"}
     name_end = PATCH_NAME_BIT + PATCH_NAME_LEN * PATCH_NAME_CHAR_BITS
@@ -132,7 +134,7 @@ def test_diff_rename_touches_only_name_bits():
 
 def test_diff_reports_coverage_as_label_ranges():
     result = diff_files(NAME_A, SESSION1)
-    assert result["coverage"]["incomplete"] == {"a": ["100-8"], "b": ["100-8"]}
+    assert result["coverage"]["incomplete"] == {"a": ["99-8"], "b": ["99-8"]}
     assert result["coverage"]["only_in_a"] == []
 
 
