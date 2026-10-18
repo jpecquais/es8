@@ -70,19 +70,19 @@ def _resolve(token: str, names: tuple[str, ...] | None, what: str) -> int:
         return int(token)
     if names is not None and token.upper() in names:
         return names.index(token.upper())
-    known = f" (connus : {', '.join(names)})" if names else ""
-    raise CodecError(f"{what} inconnu : {token!r}{known}.")
+    known = f" (known: {', '.join(names)})" if names else ""
+    raise CodecError(f"Unknown {what}: {token!r}{known}.")
 
 
 def resolve_index(field: str, token: str) -> int:
     """Index numérique ou symbolique (`NUM_8`, `L6`…) d'un champ liste."""
-    return _resolve(token, INDEX_NAMES.get(field), f"Index de {field}")
+    return _resolve(token, INDEX_NAMES.get(field), f"index of {field}")
 
 
 def resolve_value(field: str, token: str) -> int | str:
     """Valeur numérique ou symbolique (`BPM`, `L7`…) ; `name` complété à 16 caractères."""
     if field == "name":
         if len(token) > NAME_LEN:
-            raise CodecError(f"Nom de {len(token)} caractères : {NAME_LEN} au plus.")
+            raise CodecError(f"Name is {len(token)} characters long: {NAME_LEN} at most.")
         return token.ljust(NAME_LEN)
-    return _resolve(token, VALUE_NAMES.get(field), f"Valeur de {field}")
+    return _resolve(token, VALUE_NAMES.get(field), f"value of {field}")

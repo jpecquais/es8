@@ -82,7 +82,7 @@ def split_pages(system: bytes) -> list[bytes]:
     """Découpe le bloc système (16 trames MIDI) en 8 pages dépaquetées."""
     if len(system) != SYSTEM_PAGES * PATCH_RECORD_LEN:
         raise CodecError(
-            f"Bloc système de {len(system)} octets MIDI, {SYSTEM_PAGES * PATCH_RECORD_LEN} attendus."
+            f"System block is {len(system)} MIDI bytes, expected {SYSTEM_PAGES * PATCH_RECORD_LEN}."
         )
     return [
         unpack_page(system[i * PATCH_RECORD_LEN : (i + 1) * PATCH_RECORD_LEN])
@@ -111,7 +111,7 @@ def encode_system(base: bytes, values: dict) -> bytes:
     known = {f.name for f in SYSTEM_FIELDS}
     unknown = set(values) - known
     if unknown:
-        raise CodecError(f"Champs inconnus : {', '.join(sorted(unknown))}.")
+        raise CodecError(f"Unknown fields: {', '.join(sorted(unknown))}.")
     pages = split_pages(base)
     out = []
     for page, fields in zip(pages, PAGE_FIELDS):

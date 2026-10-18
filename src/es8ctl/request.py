@@ -48,7 +48,7 @@ def editor_mode_message(on: bool) -> bytes:
 def request_message(first_id: int, last_id: int) -> bytes:
     """RQ1 des messages first_id … last_id (inclus), comme l'éditeur officiel."""
     if not 0 <= first_id <= last_id <= BULK_LAST_COUNTER:
-        raise ValueError(f"Plage de messages invalide : {first_id}–{last_id}.")
+        raise ValueError(f"Invalid message range: {first_id}–{last_id}.")
     n = last_id - first_id
     return _sysex(CMD_RQ1, [first_id >> 7, first_id & 0x7F, n >> 7, n & 0x7F])
 

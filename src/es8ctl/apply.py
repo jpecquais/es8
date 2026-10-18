@@ -88,15 +88,15 @@ def _field_changes(target: str, before: dict, after: dict) -> list[dict]:
 def _with_positions(page: bytes, fields: dict) -> dict:
     """Traduit `loop_chain` (notation de l'écran) en `loop_position`."""
     if not isinstance(fields, dict):
-        raise CodecError("Changements d'un patch : objet {champ: valeur} attendu.")
+        raise CodecError("Patch changes: expected an object {field: value}.")
     if "loop_chain" not in fields:
         return fields
     if "loop_position" in fields:
-        raise CodecError("Fournir loop_chain ou loop_position, pas les deux.")
+        raise CodecError("Give loop_chain or loop_position, not both.")
     fields = dict(fields)
     text = fields.pop("loop_chain")
     if not isinstance(text, str):
-        raise CodecError("loop_chain : chaîne attendue (ex. « V8746(3//5)21 »).")
+        raise CodecError("loop_chain: expected a string (e.g. \"V8746(3//5)21\").")
     fields["loop_position"] = parse_chain(text, base=decode_patch(page)["loop_position"])
     return fields
 
@@ -104,7 +104,7 @@ def _with_positions(page: bytes, fields: dict) -> dict:
 def plan_changes(base_frames: list[bytes], changes: dict) -> Plan:
     """Construit le plan d'écriture. Lève CodecError au moindre problème."""
     if not isinstance(changes, dict) or set(changes) - {"patches", "system"}:
-        raise CodecError('Changements : objet JSON avec les clés "patches" et/ou "system".')
+        raise CodecError('Changes: expected a JSON object with "patches" and/or "system".')
     dump = split_dump(base_frames)
     data = frames_by_counter(base_frames)
     frames: list[bytes] = []
@@ -114,7 +114,7 @@ def plan_changes(base_frames: list[bytes], changes: dict) -> Plan:
     system_changes = changes.get("system") or {}
     if system_changes:
         if dump.system is None:
-            raise CodecError("Le dump de base n'a pas de bloc système : impossible de le modifier.")
+            raise CodecError("The base dump has no system block: cannot change it.")
         before = decode_system(dump.system)
         edited = encode_system(dump.system, system_changes)
         diffs += _field_changes("system", before, decode_system(edited))
@@ -128,11 +128,11 @@ def plan_changes(base_frames: list[bytes], changes: dict) -> Plan:
 
     patch_changes = changes.get("patches") or {}
     if not isinstance(patch_changes, dict):
-        raise CodecError('"patches" : objet {"banque-numéro": {champ: valeur}} attendu.')
+        raise CodecError('"patches": expected an object {"bank-number": {field: value}}.')
     for label in sorted(patch_changes, key=parse_patch_label):
         index = parse_patch_label(label)
         if index not in dump.patches:
-            raise CodecError(f"Patch {label} absent ou incomplet dans le dump de base.")
+            raise CodecError(f"Patch {label} is missing or incomplete in the base dump.")
         record = dump.patches[index]
         page = unpack_page(record)
         edited = encode_patch(page, _with_positions(page, patch_changes[label]))
@@ -156,7 +156,7 @@ def check_changes(actual_frames: list[bytes], changes: dict) -> dict:
     base, ou pour savoir précisément quelles pages d'un envoi sont arrivées.
     """
     if not isinstance(changes, dict) or set(changes) - {"patches", "system"}:
-        raise CodecError('Changements : objet JSON avec les clés "patches" et/ou "system".')
+        raise CodecError('Changes: expected a JSON object with "patches" and/or "system".')
     dump = split_dump(actual_frames)
     results: list[dict] = []
 
@@ -175,7 +175,7 @@ def check_changes(actual_frames: list[bytes], changes: dict) -> dict:
         wanted = _with_positions(page, changes["patches"][label])
         unknown = set(wanted) - set(decode_patch(page))
         if unknown:
-            raise CodecError(f"Champs inconnus : {', '.join(sorted(unknown))}.")
+            raise CodecError(f"Unknown fields: {', '.join(sorted(unknown))}.")
         compare(label, decode_patch(page), wanted)
     if changes.get("system"):
         if dump.system is None:

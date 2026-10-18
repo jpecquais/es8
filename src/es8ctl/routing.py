@@ -36,7 +36,7 @@ _SYMBOL.update({k: str(k) for k in range(1, 9)})
 def _check(positions: list[int]) -> None:
     if len(positions) != POSITION_COUNT or Counter(positions) != _EXPECTED:
         raise CodecError(
-            "loop_position invalide : 0-9 une fois chacun, 10-15 deux fois chacun attendus."
+            "Invalid loop_position: expected 0-9 once each and 10-15 twice each."
         )
 
 
@@ -64,7 +64,7 @@ def _render(seq: list[int]) -> str:
                     split = j
                 j += 1
             if split is None:
-                raise CodecError("Parallèle sans séparateur dans loop_position.")
+                raise CodecError("Parallel block without a separator in loop_position.")
             first, second = _render(seq[i + 1 : split]), _render(seq[split + 1 : j])
             out.append(f"{_SYMBOL[token]}{second}//{first}{_SYMBOL[close]}")  # ordre de l'écran
             i = j + 1
@@ -72,7 +72,7 @@ def _render(seq: list[int]) -> str:
             out.append(_SYMBOL[token])
             i += 1
         else:
-            raise CodecError(f"Marqueur inattendu {token} dans loop_position.")
+            raise CodecError(f"Unexpected marker {token} in loop_position.")
     return "".join(out)
 
 
@@ -92,10 +92,10 @@ def _parse(text: str, i: int, stop: str | None) -> tuple[list[int], int]:
             opener, sep, closer = _MARKER_SETS[0] if c == "(" else _MARKER_SETS[1]
             second, i = _parse(text, i + 1, "//")
             if not text.startswith("//", i):
-                raise CodecError(f"Parallèle sans « // » dans {text!r}.")
+                raise CodecError(f"Parallel block without \"//\" in {text!r}.")
             first, i = _parse(text, i + 2, close)
             if i >= len(text) or text[i] != close:
-                raise CodecError(f"Parallèle non fermé dans {text!r}.")
+                raise CodecError(f"Unclosed parallel block in {text!r}.")
             seq += [opener, *first, sep, *second, closer]  # écran → ordre de la liste
             i += 1
         elif c.upper() == "V":
@@ -107,9 +107,9 @@ def _parse(text: str, i: int, stop: str | None) -> tuple[list[int], int]:
         elif c in " -":
             i += 1
         else:
-            raise CodecError(f"Caractère inattendu {c!r} dans la chaîne {text!r}.")
+            raise CodecError(f"Unexpected character {c!r} in the chain {text!r}.")
     if stop is not None:
-        raise CodecError(f"Chaîne incomplète : {text!r}.")
+        raise CodecError(f"Incomplete chain: {text!r}.")
     return seq, i
 
 
@@ -123,15 +123,15 @@ def parse(text: str, base: list[int] | None = None) -> list[int]:
     seq, _ = _parse(text.strip(), 0, None)
     loops = [t for t in seq if t <= 8]
     if sorted(loops) != list(range(9)):
-        raise CodecError(f"La chaîne {text!r} doit contenir V et 1-8 exactement une fois.")
+        raise CodecError(f"The chain {text!r} must contain V and 1-8 exactly once.")
     remaining = _EXPECTED - Counter(seq) - Counter(range(10))
     if any(v < 0 for v in (Counter(seq) - _EXPECTED).values()) or (Counter(seq) - _EXPECTED):
-        raise CodecError(f"Trop de parallèles dans {text!r} (deux par jeu au plus).")
+        raise CodecError(f"Too many parallel blocks in {text!r} (two of each kind at most).")
     if base is not None:
         try:
             return with_chain(base, seq)
         except ValueError:
-            raise CodecError(f"Trop de parallèles dans {text!r} (deux par jeu au plus).") from None
+            raise CodecError(f"Too many parallel blocks in {text!r} (two of each kind at most).") from None
     tail = []
     for markers in _MARKER_SETS:
         for _ in range(remaining[markers[0]]):
@@ -150,7 +150,7 @@ def with_chain(positions: list[int], new_chain: list[int]) -> list[int]:
     _check(positions)
     need = _EXPECTED - Counter(range(10)) - Counter(new_chain)
     if Counter(t for t in new_chain if t > END) - (_EXPECTED - Counter(range(10))):
-        raise ValueError("trop de marqueurs")
+        raise ValueError("too many markers")
     spare = []
     for token in positions[positions.index(END) + 1 :]:  # ordre d'origine d'abord
         if need[token] > 0:

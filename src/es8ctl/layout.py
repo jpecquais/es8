@@ -82,7 +82,7 @@ def out_of_range(decoded: dict, fields: tuple[Field, ...]) -> list[str]:
         for i, v in enumerate(values):
             if not field.lo <= v <= field.hi:
                 where = f"{field.name}[{i}]" if field.count > 1 else field.name
-                problems.append(f"{where} = {v} hors [{field.lo}, {field.hi}]")
+                problems.append(f"{where} = {v} is outside [{field.lo}, {field.hi}]")
     return problems
 
 
@@ -90,19 +90,19 @@ def _values(field: Field, value) -> list[int]:
     """Normalise une valeur JSON en liste d'entiers, avec validation stricte."""
     if field.is_text:
         if not isinstance(value, str) or len(value) != field.count:
-            raise CodecError(f"{field.name} : chaîne de {field.count} caractères attendue.")
+            raise CodecError(f"{field.name}: expected a string of {field.count} characters.")
         values = [ord(c) for c in value]
     elif field.is_list:
         if not isinstance(value, list) or len(value) != field.count:
-            raise CodecError(f"{field.name} : liste de {field.count} valeurs attendue.")
+            raise CodecError(f"{field.name}: expected a list of {field.count} values.")
         values = value
     else:
         values = [value]
     for v in values:
         if not isinstance(v, int) or isinstance(v, bool):
-            raise CodecError(f"{field.name} : entiers attendus.")
+            raise CodecError(f"{field.name}: expected integers.")
         if not field.lo <= v <= field.hi:
-            raise CodecError(f"{field.name} : {v} hors bornes [{field.lo}, {field.hi}].")
+            raise CodecError(f"{field.name}: {v} is out of range [{field.lo}, {field.hi}].")
     return values
 
 
@@ -114,7 +114,7 @@ def encode_fields(base: bytes, fields: tuple[Field, ...], values: dict) -> bytes
     by_name = {f.name: f for f in fields}
     unknown = set(values) - set(by_name)
     if unknown:
-        raise CodecError(f"Champs inconnus : {', '.join(sorted(unknown))}.")
+        raise CodecError(f"Unknown fields: {', '.join(sorted(unknown))}.")
     data = base
     for name, value in values.items():
         field = by_name[name]

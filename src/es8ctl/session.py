@@ -114,9 +114,9 @@ async def send_frames_async(
 ) -> int:
     """Envoie des pages : moitiés à `interval_s`, pause `page_gap_s` entre pages."""
     if interval_s < MIN_INTERVAL_S or page_gap_s < MIN_INTERVAL_S:
-        raise ValueError(f"Délai < {MIN_INTERVAL_S} s exigé par la spec Roland.")
+        raise ValueError(f"The Roland spec requires a delay of at least {MIN_INTERVAL_S} s.")
     if len(frames) % PATCH_FRAMES:
-        raise ValueError("Nombre de trames impair : une page incomplète serait rejetée.")
+        raise ValueError("Odd number of frames: an incomplete page would be rejected.")
     sent = 0
     for frame in frames:
         if sent:

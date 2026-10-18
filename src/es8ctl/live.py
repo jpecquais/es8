@@ -66,9 +66,9 @@ def select(label: str) -> Operation:
 def rename(label: str, name: str) -> Operation:
     index = parse_patch_label(label)
     if len(name) > NAME_LEN:
-        raise CodecError(f"Nom de {len(name)} caractères : {NAME_LEN} au plus.")
+        raise CodecError(f"Name is {len(name)} characters long: {NAME_LEN} at most.")
     if not all(32 <= ord(c) < 127 for c in name):
-        raise CodecError("Nom : caractères ASCII imprimables uniquement.")
+        raise CodecError("Name: printable ASCII characters only.")
     padded = name.ljust(NAME_LEN)
     chars = [dt1((0x7F, 0x70 + i), (0x00, ord(c))) for i, c in enumerate(padded)]
     return Operation(
@@ -82,7 +82,7 @@ def rename(label: str, name: str) -> Operation:
 def copy(source: str, target: str) -> Operation:
     src, dst = parse_patch_label(source), parse_patch_label(target)
     if src == dst:
-        raise CodecError("Source et cible identiques.")
+        raise CodecError("Source and target are the same.")
     return Operation(
         "copy",
         _wrap([dt1((0x7F, 0x60), _num(src)), dt1((0x7F, 0x22), _num(dst))]),
@@ -94,7 +94,7 @@ def copy(source: str, target: str) -> Operation:
 def exchange(first: str, second: str) -> Operation:
     a, b = parse_patch_label(first), parse_patch_label(second)
     if a == b:
-        raise CodecError("Les deux patchs sont identiques.")
+        raise CodecError("The two patches are the same.")
     return Operation(
         "exchange",
         _wrap([dt1((0x7F, 0x60), _num(a)), dt1((0x7F, 0x23), _num(b))]),

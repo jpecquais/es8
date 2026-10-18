@@ -153,7 +153,7 @@ def build_frame(
     for name, values in (("adresse", address), ("données", data)):
         for value in values:
             if not 0 <= value <= 0x7F:
-                raise CodecError(f"Octet de {name} hors plage 0-0x7F : {value:#04x}.")
+                raise CodecError(f"{name} byte out of range 0-0x7F: {value:#04x}.")
     payload = address + data
     return bytes(
         [

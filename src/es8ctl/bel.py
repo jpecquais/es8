@@ -42,7 +42,7 @@ def _to_bel(name: str, value):
 def _from_bel(name: str, value):
     if name == "name":
         if not isinstance(value, list) or not all(isinstance(c, int) for c in value):
-            raise CodecError("ID_PATCH_NAME : liste de codes ASCII attendue.")
+            raise CodecError("ID_PATCH_NAME: expected a list of ASCII codes.")
         return "".join(map(chr, value))
     return value
 
@@ -58,7 +58,7 @@ def export_bel(dump: BulkDump, last_frames: dict[int, bytes] | None = None) -> t
     reconstituer un patch incomplet (99-8).
     """
     if dump.system is None:
-        raise CodecError("Le dump n'a pas de bloc système : export .bel impossible.")
+        raise CodecError("The dump has no system block: cannot export .bel.")
     warnings: list[str] = []
     factory = _factory_record(dump)
     patches = []
@@ -67,7 +67,7 @@ def export_bel(dump: BulkDump, last_frames: dict[int, bytes] | None = None) -> t
         if record is None:
             first = (last_frames or {}).get(16 + 2 * index)
             if first is None:
-                raise CodecError(f"Patch {patch_label(index)} absent du dump : export .bel impossible.")
+                raise CodecError(f"Patch {patch_label(index)} missing from the dump: cannot export .bel.")
             record = first + factory[BULK_DATA_LEN:]
             same = first == factory[:BULK_DATA_LEN]
             warnings.append(
@@ -89,12 +89,12 @@ def import_bel(document: dict, base: BulkDump) -> tuple[dict, list[str]]:
     manquante = erreur.
     """
     if not isinstance(document, dict) or document.get("target") != BEL_TARGET:
-        raise CodecError(f'Pas un .bel ES-8 (attendu "target": "{BEL_TARGET}").')
+        raise CodecError(f'Not an ES-8 .bel file (expected "target": "{BEL_TARGET}").')
     if document.get("format") != BEL_FORMAT:
-        raise CodecError(f"Format .bel {document.get('format')!r} non pris en charge (attendu {BEL_FORMAT}).")
+        raise CodecError(f"Unsupported .bel format {document.get('format')!r} (expected {BEL_FORMAT}).")
     patches_in = document.get("patch")
     if not isinstance(patches_in, list) or len(patches_in) != PATCH_COUNT:
-        raise CodecError(f'"patch" : liste de {PATCH_COUNT} patchs attendue.')
+        raise CodecError(f'"patch": expected a list of {PATCH_COUNT} patches.')
     warnings: list[str] = []
     expected_keys = {patch_key(f.name): f.name for f in PATCH_FIELDS}
 
@@ -102,9 +102,9 @@ def import_bel(document: dict, base: BulkDump) -> tuple[dict, list[str]]:
     for index, entry in enumerate(patches_in):
         if set(entry) != set(expected_keys):
             diff = set(entry) ^ set(expected_keys)
-            raise CodecError(f"Patch {patch_label(index)} : clés inattendues ou manquantes {sorted(diff)}.")
+            raise CodecError(f"Patch {patch_label(index)}: unexpected or missing keys {sorted(diff)}.")
         if index not in base.patches:
-            warnings.append(f"{patch_label(index)} : absent ou incomplet du dump de base, ignoré.")
+            warnings.append(f"{patch_label(index)}: missing or incomplete in the base dump, skipped.")
             continue
         current = decode_patch(unpack_page(base.patches[index]))
         wanted = {name: _from_bel(name, entry[key]) for key, name in expected_keys.items()}
@@ -115,14 +115,14 @@ def import_bel(document: dict, base: BulkDump) -> tuple[dict, list[str]]:
     changes: dict = {"patches": patches}
     system_in = document.get("system")
     if not isinstance(system_in, dict):
-        raise CodecError('"system" : objet attendu.')
+        raise CodecError('"system": expected an object.')
     known = {system_key(f.name): f.name for f in SYSTEM_FIELDS}
     unexpected = set(system_in) - set(known)
     missing = set(known) - set(system_in)
     if unexpected or missing:
-        raise CodecError(f"Système : clés inattendues {sorted(unexpected)}, manquantes {sorted(missing)}.")
+        raise CodecError(f"System: unexpected keys {sorted(unexpected)}, missing {sorted(missing)}.")
     if base.system is None:
-        warnings.append("Le dump de base n'a pas de bloc système : système ignoré.")
+        warnings.append("The base dump has no system block: system skipped.")
     else:
         current = decode_system(base.system)
         system_changes = {

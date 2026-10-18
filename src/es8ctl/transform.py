@@ -40,11 +40,11 @@ def select_patches(dump: BulkDump, spec: str | None) -> list[int]:
     for part in spec.split(","):
         bounds = [parse_patch_label(b.strip()) for b in part.split("..")]
         if len(bounds) not in (1, 2) or bounds[0] > bounds[-1]:
-            raise CodecError(f"Sélection invalide : {part!r} (ex. 0-1..9-8).")
+            raise CodecError(f"Invalid selection: {part!r} (e.g. 0-1..9-8).")
         chosen.update(range(bounds[0], bounds[-1] + 1))
     missing = [patch_label(i) for i in sorted(chosen) if i not in dump.patches]
     if missing:
-        raise CodecError(f"Patch(s) absent(s) ou incomplet(s) dans le dump : {', '.join(missing)}.")
+        raise CodecError(f"Patch(es) missing or incomplete in the dump: {', '.join(missing)}.")
     return sorted(chosen)
 
 
@@ -52,20 +52,20 @@ def parse_assignment(text: str) -> tuple[str, int | None, int | str]:
     """« ctl_func[NUM_8]=BPM » → ("ctl_func", 11, 21)."""
     match = _ASSIGNMENT.match(text)
     if not match:
-        raise CodecError(f"Affectation invalide : {text!r} (ex. master_bpm=120, ctl_func[NUM_8]=BPM).")
+        raise CodecError(f"Invalid assignment: {text!r} (e.g. master_bpm=120, ctl_func[NUM_8]=BPM).")
     name, index, value = match.groups()
     field = FIELDS_BY_NAME.get(name)
     if field is None:
-        raise CodecError(f"Champ inconnu : {name!r}.")
+        raise CodecError(f"Unknown field: {name!r}.")
     if index is not None:
         if not field.is_list:
-            raise CodecError(f"{name} n'est pas une liste : pas d'index.")
+            raise CodecError(f"{name} is not a list: no index allowed.")
         position = resolve_index(name, index)
         if not 0 <= position < field.count:
-            raise CodecError(f"Index {position} hors de {name}[0..{field.count - 1}].")
+            raise CodecError(f"Index {position} is outside {name}[0..{field.count - 1}].")
         return name, position, resolve_value(name, value)
     if field.is_list:
-        raise CodecError(f"{name} est une liste de {field.count} valeurs : préciser un index.")
+        raise CodecError(f"{name} is a list of {field.count} values: give an index.")
     return name, None, resolve_value(name, value)
 
 
@@ -84,7 +84,7 @@ def _collect(dump: BulkDump, indices: list[int], edit) -> dict:
 def op_set(dump: BulkDump, indices: list[int], assignments: list[str]) -> dict:
     parsed = [parse_assignment(a) for a in assignments]
     if not parsed:
-        raise CodecError("Aucune affectation fournie.")
+        raise CodecError("No assignment given.")
 
     def edit(fields: dict) -> dict:
         for name, index, value in parsed:
@@ -103,7 +103,7 @@ def _loop_index(token: str) -> int:
         return LOOPS.index(token)
     if token.isdigit() and 1 <= int(token) <= 8:
         return int(token) - 1
-    raise CodecError(f"Loop inconnue : {token!r} (1-8, L1…L8 ou LV).")
+    raise CodecError(f"Unknown loop: {token!r} (1-8, L1…L8 or LV).")
 
 
 def _chain_value(loop_index: int) -> int:
@@ -118,7 +118,7 @@ def op_swap_loops(dump: BulkDump, indices: list[int], a: str, b: str) -> dict:
     """
     ia, ib = _loop_index(a), _loop_index(b)
     if ia == ib:
-        raise CodecError("Les deux loops à échanger sont identiques.")
+        raise CodecError("The two loops to swap are the same.")
 
     def edit(fields: dict) -> dict:
         for name in LOOP_INDEXED_FIELDS:
@@ -159,16 +159,16 @@ def op_variants(
 
     src = parse_patch_label(source)
     if src not in dump.patches:
-        raise CodecError(f"Patch source {source} absent ou incomplet dans le dump.")
+        raise CodecError(f"Source patch {source} is missing or incomplete in the dump.")
     start = parse_patch_label(into)
     targets = list(range(start, start + count))
     if count < 1 or targets[-1] >= 800:
-        raise CodecError(f"{count} variante(s) à partir de {into} : dépasse 99-8.")
+        raise CodecError(f"{count} variant(s) starting at {into}: goes past 99-8.")
     if src in targets:
-        raise CodecError("La plage cible contient le patch source.")
+        raise CodecError("The target range contains the source patch.")
     missing = [patch_label(i) for i in targets if i not in dump.patches]
     if missing:
-        raise CodecError(f"Patch(s) cible(s) absent(s) ou incomplet(s) : {', '.join(missing)}.")
+        raise CodecError(f"Target patch(es) missing or incomplete: {', '.join(missing)}.")
 
     base = decode_patch(unpack_page(dump.patches[src]))
     positions = base["loop_position"]
@@ -177,7 +177,7 @@ def op_variants(
     loops = [positions[i] for i in slots]
     available = factorial(len(loops)) - 1  # toutes les permutations sauf l'originale
     if count > available:
-        raise CodecError(f"{count} variantes demandées, {available} routings distincts possibles.")
+        raise CodecError(f"{count} variants requested, only {available} distinct routings possible.")
 
     rng = random.Random(seed)
     seen = {tuple(loops)}
@@ -199,8 +199,8 @@ def op_variants(
         current = decode_patch(unpack_page(dump.patches[target]))
         if not overwrite and current["name"] != FACTORY_NAME:
             raise CodecError(
-                f"Le patch cible {patch_label(target)} « {current['name'].rstrip()} » n'est pas "
-                "vierge : choisir une autre plage ou passer --overwrite."
+                f"Target patch {patch_label(target)} \"{current['name'].rstrip()}\" is not "
+                "blank: choose another range or pass --overwrite."
             )
         new_positions = list(positions)
         for slot, loop in zip(slots, order):

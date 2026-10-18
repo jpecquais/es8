@@ -127,9 +127,9 @@ def parse_es8_bulk_frame(frame: bytes) -> ES8BulkMessage:
 def build_es8_bulk_frame(counter: int, data: bytes) -> bytes:
     """Construit une trame de bulk dump ES-8 complète, checksum inclus."""
     if not 0 <= counter <= 0x3FFF:
-        raise CodecError(f"Compteur hors plage 0-0x3FFF : {counter}.")
+        raise CodecError(f"Counter out of range 0-0x3FFF: {counter}.")
     if len(data) != BULK_DATA_LEN:
-        raise CodecError(f"Les données font {len(data)} octets, {BULK_DATA_LEN} attendus.")
+        raise CodecError(f"Data is {len(data)} bytes, expected {BULK_DATA_LEN}.")
     ctr = bytes([counter // 128, counter % 128])
     payload = ctr + data
     return ES8_BULK_HEADER + payload + bytes([checksum(payload), SYSEX_END])
@@ -150,7 +150,7 @@ def frames_by_counter(frames: list[bytes]) -> dict[int, bytes]:
     for frame in frames:
         msg = parse_es8_bulk_frame(frame)
         if msg.counter in by_counter:
-            raise CodecError(f"Compteur {msg.counter} présent deux fois.")
+            raise CodecError(f"Counter {msg.counter} appears twice.")
         by_counter[msg.counter] = msg.data
     return by_counter
 
@@ -200,9 +200,9 @@ def unpack_7to8(packed: bytes) -> bytes:
     for start in range(0, len(packed), GROUP_LEN):
         carrier, *data = packed[start : start + GROUP_LEN]
         if not data:
-            raise CodecError(f"Groupe sans données à l'octet {start}.")
+            raise CodecError(f"Group without data at byte {start}.")
         if carrier & ((1 << (7 - len(data))) - 1):
-            raise CodecError(f"Bits parasites dans le porteur à l'octet {start}.")
+            raise CodecError(f"Stray bits in the carrier byte at {start}.")
         for i, byte in enumerate(data):
             out.append(byte | ((carrier >> (6 - i)) & 1) << 7)
     return bytes(out)
@@ -228,7 +228,7 @@ def unpack_page(record: bytes) -> bytes:
     d'un seul tenant décalerait toute la seconde moitié de la page.
     """
     if len(record) != PATCH_RECORD_LEN:
-        raise CodecError(f"Page de {len(record)} octets MIDI, {PATCH_RECORD_LEN} attendus.")
+        raise CodecError(f"Page is {len(record)} MIDI bytes, expected {PATCH_RECORD_LEN}.")
     return b"".join(
         unpack_7to8(record[i * BULK_DATA_LEN : (i + 1) * BULK_DATA_LEN])
         for i in range(PATCH_FRAMES)
@@ -238,7 +238,7 @@ def unpack_page(record: bytes) -> bytes:
 def pack_page(data: bytes) -> bytes:
     """Empaquette 250 octets de données en une page de 2 messages. Inverse de unpack_page."""
     if len(data) != PATCH_DATA_LEN:
-        raise CodecError(f"Page de {len(data)} octets, {PATCH_DATA_LEN} attendus.")
+        raise CodecError(f"Page is {len(data)} bytes, expected {PATCH_DATA_LEN}.")
     return b"".join(
         pack_8to7(data[i * MESSAGE_DATA_LEN : (i + 1) * MESSAGE_DATA_LEN])
         for i in range(PATCH_FRAMES)
@@ -256,7 +256,7 @@ def get_bits(data: bytes, offset: int, width: int) -> int:
 def set_bits(data: bytes, offset: int, width: int, value: int) -> bytes:
     """Écrit `value` sur `width` bits à partir du bit `offset` ; rend une copie."""
     if not 0 <= value < 1 << width:
-        raise CodecError(f"Valeur {value} hors plage pour {width} bits.")
+        raise CodecError(f"Value {value} does not fit in {width} bits.")
     out = bytearray(data)
     for i, pos in enumerate(range(offset, offset + width)):
         bit = value >> (width - 1 - i) & 1
@@ -284,7 +284,7 @@ def parse_patch_label(label: str) -> int:
     try:
         bank, number = (int(part) for part in label.split("-"))
     except ValueError:
-        raise CodecError(f"Numéro de patch invalide : {label!r} (attendu banque-numéro, ex. 0-1).") from None
+        raise CodecError(f"Invalid patch number: {label!r} (expected bank-number, e.g. 0-1).") from None
     if not (0 <= bank < PATCH_COUNT // PATCHES_PER_BANK and 1 <= number <= PATCHES_PER_BANK):
-        raise CodecError(f"Patch hors plage : {label!r} (0-1 … 99-8).")
+        raise CodecError(f"Patch out of range: {label!r} (0-1 … 99-8).")
     return bank * PATCHES_PER_BANK + number - 1
