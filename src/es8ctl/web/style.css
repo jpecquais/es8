@@ -149,7 +149,7 @@ input[type="number"] { width: 76px; font-family: var(--font-mono); }
 .p-head { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 14px; }
 .p-head .num { font: 600 15px var(--font-mono); color: var(--muted); padding-bottom: 7px; }
 .p-name {
-  width: 15ch; padding: 2px 6px; margin-left: -6px; border: 1px solid transparent; border-radius: var(--r); background: none;
+  width: 11.6em; max-width: 100%; padding: 2px 6px; margin-left: -6px; border: 1px solid transparent; border-radius: var(--r); background: none;
   font: 600 30px/1.1 var(--font-display); letter-spacing: 0.02em;
 }
 .p-name:hover, .p-name:focus { border-color: var(--line); background: var(--panel); }
