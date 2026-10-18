@@ -273,3 +273,15 @@ def test_import_export_factory_and_variants():
     assert summary["patches"] == ["20-1", "20-2", "20-3"]
     assert json.loads(webapp.patch_detail("20-2"))["name"].startswith("VAR 2")
     webapp.discard()
+
+
+def test_build_web_produces_a_static_site(tmp_path):
+    from typer.testing import CliRunner
+
+    from es8ctl.cli import app
+
+    result = CliRunner().invoke(app, ["build-web", "--out", str(tmp_path / "site")])
+    assert result.exit_code == 0, result.output
+    for name in ("index.html", "app.js", "engine.js", "chain.js", "describe.js", "style.css",
+                 "vendor/preact-htm.module.js", "es8ctl.zip", ".nojekyll"):
+        assert (tmp_path / "site" / name).is_file()

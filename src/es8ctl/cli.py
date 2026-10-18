@@ -848,3 +848,23 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
+@app.command("build-web")
+def build_web(
+    out: Path = typer.Option(Path("dist/site"), "--out", "-o", help="Répertoire du site à produire."),
+) -> None:
+    """Produit l'interface web en site statique (GitHub Pages ou tout hébergement HTTPS).
+
+    Tout s'exécute dans le navigateur : le site n'a besoin d'aucun serveur
+    applicatif. Web MIDI exige HTTPS (ou localhost).
+    """
+    import shutil
+
+    web_dir = Path(__file__).resolve().parent / "web"
+    if out.exists():
+        shutil.rmtree(out)
+    shutil.copytree(web_dir, out)
+    (out / "es8ctl.zip").write_bytes(library_zip())
+    (out / ".nojekyll").write_text("")  # GitHub Pages : servir les fichiers tels quels
+    _print_json({"site": str(out), "files": sorted(str(p.relative_to(out)) for p in out.rglob("*") if p.is_file())})
