@@ -89,6 +89,8 @@ def _merge_read(frames: dict[int, bytes]) -> None:
     """Intègre une lecture partielle de l'appareil dans l'état connu."""
     merged = dict(state["frames"])
     merged.update(frames)
+    if any(c < 16 for c in frames):
+        state.pop("current", None)  # bloc système relu : il fait foi
     state["fresh"] |= set(frames)
     _set_frames(merged, state["source"] or "device")
 
@@ -114,6 +116,7 @@ async def read_device(on_progress=None, idle_s: float = DEFAULT_IDLE_S) -> str:
     _set_frames(frames, "device")
     state["fresh"] = set(frames)
     state["cached_at"] = None
+    state.pop("current", None)
     return json.dumps({"frames": len(frames), "missing_pages": missing})
 
 
@@ -145,6 +148,17 @@ async def read_names(on_progress=None, idle_s: float = DEFAULT_IDLE_S) -> str:
     return json.dumps({"names": len(names)})
 
 
+async def select_on_device(label: str) -> str:
+    """Rappelle un patch sur l'ES-8 (commande directe, comme l'éditeur officiel)."""
+    from .live import select
+
+    for message in select(label).messages:
+        transport.send(message)
+        await asyncio.sleep(0.03)
+    state["current"] = label  # le bloc système local ne le sait pas encore
+    return json.dumps({"selected": label})
+
+
 def load_cached(data, cached_at: str) -> str:
     """Dernière lecture gardée par le navigateur : affichée, mais marquée « ancienne »."""
     result = load_syx(data)
@@ -159,6 +173,7 @@ def load_syx(data) -> str:
     frames = {parse_es8_bulk_frame(f).counter: f for f in split_frames(raw)}
     _set_frames(frames, "file")
     state["fresh"], state["cached_at"], state["names"] = set(), None, {}
+    state.pop("current", None)
     return json.dumps({"frames": len(frames), "patches": len(state["dump"].patches)})
 
 
@@ -557,8 +572,8 @@ def bank_grid() -> str:
         if index in names and names[index].rstrip() != cell["name"]:  # renommé sur l'appareil depuis
             cell.update(name=names[index].rstrip(), stale=True, unnamed=names[index] == FACTORY_NAME)
         cells.append(cell)
-    current = None
-    if state["dump"] is not None and state["dump"].system is not None:
+    current = state.get("current")
+    if current is None and state["dump"] is not None and state["dump"].system is not None:
         current = patch_label(decode_system(state["dump"].system)["current_num"])
     return json.dumps({"source": state["source"], "cached_at": state["cached_at"],
                        "fresh_patches": len({c // 2 for c in state["fresh"] if c >= 16}),

@@ -69,6 +69,16 @@ def _target_values(name: str) -> list[str] | None:
 
 ASSIGN_TARGET_VALUES = [_target_values(t) for t in ASSIGN_TARGETS]
 
+# Divisions de tempo (valeurs 1-13) des CTL en mode TP et de la vitesse de l'onde.
+TEMPO_DIVISIONS = {1: "1/1", 2: "1/2 D", 3: "1/1 T", 4: "1/2", 5: "1/4 D", 6: "1/2 T", 7: "1/4",
+                   8: "1/8 D", 9: "1/4 T", 10: "1/8", 11: "1/16 D", 12: "1/8 T", 13: "1/16"}
+
+INT_PEDAL_TRIGGERS = [
+    "Patch change", "EXP 1 low", "EXP 1 mid", "EXP 1 high", "EXP 2 low", "EXP 2 mid", "EXP 2 high",
+    "CTL 1", "CTL 2", "CTL 3", "CTL 4", "Memory/Manual", "Mute", "Bank ▼", "Bank ▲",
+    *[f"Number {n}" for n in range(1, 9)], "Current number", "MIDI CC",
+]
+
 PATCH_VALUE_LABELS: dict[str, list[str]] = {
     "input_select": ["1", "2"],
     "input_buffer": OFF_ON,
@@ -89,6 +99,10 @@ PATCH_VALUE_LABELS: dict[str, list[str]] = {
     "midi_pc": ["Off", *_nums(0, 127)],
     "midi_pc_bank_msb": ["Off", *_nums(0, 127)],
     "midi_pc_bank_lsb": ["Off", *_nums(0, 127)],
+    "assign_int_pedal_trigger": INT_PEDAL_TRIGGERS,
+    "assign_int_pedal_trigger_cc": [f"CC {n}" for n in range(128)],
+    "exp1": [*_nums(0, 127), "EXP 1 pedal", "EXP 2 pedal"],
+    "exp2": [*_nums(0, 127), "EXP 1 pedal", "EXP 2 pedal"],
     "midi_ctl1_cc": ["Off", *(f"CC {n}" for n in range(128))],
     "midi_ctl2_cc": ["Off", *(f"CC {n}" for n in range(128))],
     **{f"led_{k}": OFF_ON for k in ("num1", "num2", "num3", "num4", "num5", "num6", "num7", "num8", "bank_d", "bank_u")},
@@ -97,7 +111,7 @@ PATCH_VALUE_LABELS: dict[str, list[str]] = {
 SYSTEM_VALUE_LABELS: dict[str, list[str]] = {
     "play_option_sw_mode": ["On press", "On release"],
     "play_option_bank_change_mode": ["Wait", "Immediate"],
-    **{f"play_option_ext_ctl_type_ctl{n}": ["Latch", "Pulse", "Inverted", "Tap 2", "Tap 3", "Tap 4"] for n in range(1, 7)},
+    **{f"play_option_ext_ctl_type_ctl{n}": ["Latch", "Pulse", "Inverted", "TP2", "TP3", "TP4"] for n in range(1, 7)},
     "preference_input_select": ["Patch", "1", "2"],
     "preference_input_buffer": ["Patch", "Off", "On"],
     "preference_output_select": ["Patch", "1", "2", "1 & 2"],
@@ -115,6 +129,12 @@ SYSTEM_VALUE_LABELS: dict[str, list[str]] = {
     **{f"manual_number{n}": ["Off", *_nums(1, 8)] for n in range(1, 9)},
     "tempo_hold": OFF_ON,
     "link": ["Off", "On", "Auto"],
+    "panel_lock": OFF_ON,
+    "memory_manual": ["Memory", "Manual"],
+    "ctl_sw": ["Patch", "System"],
+    "exp_sw": ["Patch", "System"],
+    "ctl_mod": ["Momentary", "Toggle"],
+    "exp_func": ["Off", "EXP 1", "EXP 2", "BPM"],
 }
 
 # Écran Système : groupes et libellés des champs, dans l'ordre des menus de l'ES-8.
@@ -152,6 +172,7 @@ SYSTEM_GROUPS: list[tuple[str, list[tuple[str, str]]]] = [
     ]),
     ("Other", [
         ("others_lcd_contrast", "Display contrast"),
+        ("panel_lock", "Panel lock"),
         *[(f"others_{k}_polarity", f"{k.upper()} polarity") for k in ("exp1", "exp2", "ctl1", "ctl2", "ctl3", "ctl4")],
     ]),
 ]
@@ -173,6 +194,7 @@ def ui_labels() -> dict:
         "assign_target_labels": ASSIGN_TARGET_LABELS,
         "assign_target_values": ASSIGN_TARGET_VALUES,
         "patch_values": PATCH_VALUE_LABELS,
+        "tempo_divisions": TEMPO_DIVISIONS,
         "system_values": SYSTEM_VALUE_LABELS,
         "system_groups": SYSTEM_GROUPS,
     }
