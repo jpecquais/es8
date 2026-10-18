@@ -1,10 +1,21 @@
 [project]
 name = "es8ctl"
 version = "0.1.0"
-description = "Open-source editor for the Boss ES-8 effects switching system"
+description = "Open-source editor and CLI for the BOSS ES-8 effects switching system"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "AGPL-3.0-or-later"
+license-files = ["LICENSE"]
+keywords = ["boss", "es-8", "midi", "sysex", "guitar", "loop switcher", "editor"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Environment :: Web Environment",
+    "Intended Audience :: End Users/Desktop",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Topic :: Multimedia :: Sound/Audio :: MIDI",
+]
 dependencies = [
     "typer>=0.12",
     "mido>=1.3",
