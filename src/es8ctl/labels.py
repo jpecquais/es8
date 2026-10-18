@@ -1,0 +1,178 @@
+"""Libellés d'affichage des valeurs, pour l'interface web.
+
+Listes de valeurs reprises de la base de paramètres de l'éditeur BOSS officiel
+(es_parameter.js), traduites quand c'est utile. Index = valeur stockée.
+Les noms symboliques pour le CLI et les agents restent dans names.py.
+"""
+
+from __future__ import annotations
+
+from .names import ASSIGN_SOURCES, ASSIGN_TARGETS, CTL_FUNCTIONS, CTL_SLOTS, LOOPS
+
+OFF_ON = ["Off", "On"]
+
+
+def _nums(first: int, last: int) -> list[str]:
+    return [str(n) for n in range(first, last + 1)]
+
+
+LOOP_LABELS = {loop: ("Volume" if loop == "LV" else f"Loop {loop[1:]}") for loop in LOOPS}
+
+CTL_SLOT_LABELS = {
+    "MEM_MAN": "Memory/Manual", "MUTE": "Mute", "BANK_D": "Bank ▼", "BANK_U": "Bank ▲",
+    **{f"NUM_{n}": f"Number {n}" for n in range(1, 9)},
+    **{f"CTL_IN_{n}": f"CTL In {n}" for n in range(1, 5)},
+}
+assert set(CTL_SLOT_LABELS) == set(CTL_SLOTS)
+
+CTL_FUNCTION_LABELS = [
+    "Off", "Memory/Manual", "Mute", "Banque −", "Banque +", "Patch +", "Patch −",
+    *[f"Numéro {n}" for n in range(1, 9)],
+    *[f"CTL {n}" for n in range(1, 7)],
+    "BPM (tap tempo)",
+]
+assert len(CTL_FUNCTION_LABELS) == len(CTL_FUNCTIONS)
+
+# Fonction de chaque pied dans un patch d'usine (ctl_func) : un pied, sa fonction.
+FACTORY_CTL_FUNC = [
+    CTL_FUNCTIONS.index(f)
+    for f in ("MEM_M", "MUTE", "BANK_D", "BANK_U", *(f"NUM_{n}" for n in range(1, 9)),
+              "CTL_1", "CTL_2", "CTL_3", "CTL_4")
+]
+
+ASSIGN_SOURCE_LABELS = [
+    "CTL 1", "CTL 2", "CTL 3", "CTL 4", "Memory/Manual", "Mute", "Bank ▼", "Bank ▲",
+    *[f"Number {n}" for n in range(1, 9)],
+    "Numéro courant", "EXP 1", "EXP 2", "Pédale interne", "Onde", "CC MIDI reçu",
+]
+assert len(ASSIGN_SOURCE_LABELS) == len(ASSIGN_SOURCES)
+
+ASSIGN_TARGET_LABELS = [
+    *[LOOP_LABELS[loop] for loop in LOOPS],
+    *[f"CTL {n}" for n in range(1, 7)], "EXP 1", "EXP 2",
+    "Entrée", "Sortie", "Memory/Manual", "Mute", "Bypass", "MIDI (CC)", "Tempo", "Tap tempo",
+    "LED Memory/Manual", "LED Mute", "LED Bypass", "LED Bank ▼", "LED Bank ▲",
+    *[f"LED Number {n}" for n in range(1, 9)],
+    *[f"MIDI du patch {n}" for n in range(1, 9)],
+]
+assert len(ASSIGN_TARGET_LABELS) == len(ASSIGN_TARGETS)
+
+
+def _target_values(name: str) -> list[str] | None:
+    """Valeurs possibles de assign_target_min/max selon la cible ; None = nombre."""
+    if name in ("EXP1", "EXP2", "MIDI"):
+        return None  # 0-127
+    if name == "MASTER_BPM":
+        return None  # 20-250
+    return {"IN": ["1", "2"], "OUT": ["1", "2", "1 et 2"], "MEM_M": ["Memory", "Manual"]}.get(name, OFF_ON)
+
+
+ASSIGN_TARGET_VALUES = [_target_values(t) for t in ASSIGN_TARGETS]
+
+PATCH_VALUE_LABELS: dict[str, list[str]] = {
+    "input_select": ["1", "2"],
+    "input_buffer": OFF_ON,
+    "output_select": ["1", "2", "1 et 2"],
+    "output_buffer": OFF_ON,
+    "output_gain": ["0 dB", "+2 dB", "+4 dB", "+6 dB"],
+    "mixer_mode": ["Auto", "Manuel"],
+    "mixer_gain1": ["−6 dB", "0 dB"],
+    "mixer_gain2": ["−6 dB", "0 dB"],
+    "midi_clock_out": ["Système", "Off"],
+    "midi_transmit": ["Auto", "Manuel"],
+    "assign_mode": ["Momentané", "Bascule"],
+    "assign_int_pedal_curve": ["Linéaire", "Lente", "Rapide"],
+    "assign_wave_pedal_form": ["Dent de scie", "Triangle", "Sinus"],
+    "exp_func": ["Off", "EXP 1", "EXP 2", "BPM"],
+    "ctl_mod": ["Momentané", "Bascule"],
+    "midi_tx_ch": ["Off", *_nums(1, 16)],
+    "midi_pc": ["Off", *_nums(0, 127)],
+    "midi_pc_bank_msb": ["Off", *_nums(0, 127)],
+    "midi_pc_bank_lsb": ["Off", *_nums(0, 127)],
+    "midi_ctl1_cc": ["Off", *(f"CC {n}" for n in range(128))],
+    "midi_ctl2_cc": ["Off", *(f"CC {n}" for n in range(128))],
+    **{f"led_{k}": OFF_ON for k in ("num1", "num2", "num3", "num4", "num5", "num6", "num7", "num8", "bank_d", "bank_u")},
+}
+
+SYSTEM_VALUE_LABELS: dict[str, list[str]] = {
+    "play_option_sw_mode": ["À l'appui", "Au relâchement"],
+    "play_option_bank_change_mode": ["Attente", "Immédiat"],
+    **{f"play_option_ext_ctl_type_ctl{n}": ["Latch", "Impulsion", "Inversé", "TP2", "TP3", "TP4"] for n in range(1, 7)},
+    "preference_input_select": ["Patch", "1", "2"],
+    "preference_input_buffer": ["Patch", "Off", "On"],
+    "preference_output_select": ["Patch", "1", "2", "1 et 2"],
+    "preference_output_buffer": ["Patch", "Off", "On"],
+    "preference_loop7_return_mode": ["Mono", "Stéréo"],
+    "preference_loop8_return_mode": ["Mono", "Stéréo"],
+    "preference_volume_loop_lift": ["Masse", "Lift"],
+    "midi_setting_midi_out_mode": ["Out", "Thru"],
+    "midi_setting_rx_ch": _nums(1, 16),
+    "midi_setting_device_id": _nums(1, 32),
+    "midi_setting_sync_clock": ["Interne", "Auto"],
+    "midi_setting_clock_out": OFF_ON,
+    "others_lcd_contrast": _nums(1, 10),
+    **{f"others_{k}_polarity": ["Standard", "Inversée"] for k in ("exp1", "exp2", "ctl1", "ctl2", "ctl3", "ctl4")},
+    **{f"manual_number{n}": ["Off", *_nums(1, 8)] for n in range(1, 9)},
+    "tempo_hold": OFF_ON,
+    "link": ["Off", "On", "Auto"],
+}
+
+# Écran Système : groupes et libellés des champs, dans l'ordre des menus de l'ES-8.
+SYSTEM_GROUPS: list[tuple[str, list[tuple[str, str]]]] = [
+    ("Options de jeu", [
+        ("play_option_sw_mode", "Déclenchement des pieds"),
+        ("play_option_bank_change_mode", "Changement de banque"),
+        ("play_option_bank_extent_min", "Première banque"),
+        ("play_option_bank_extent_max", "Dernière banque"),
+        ("play_option_patch_change_time", "Temps de changement de patch"),
+        *[(f"play_option_ext_ctl_type_ctl{n}", f"Type de CTL {n} externe") for n in range(1, 7)],
+    ]),
+    ("Préférences", [
+        ("preference_input_select", "Entrée"),
+        ("preference_input_buffer", "Buffer d'entrée"),
+        ("preference_output_select", "Sortie"),
+        ("preference_output_buffer", "Buffer de sortie"),
+        ("preference_loop7_return_mode", "Retour loop 7"),
+        ("preference_loop8_return_mode", "Retour loop 8"),
+        ("preference_volume_loop_lift", "Masse de la loop volume"),
+        ("preference_memory_manual_sw_mode", "Mode du pied Memory/Manual"),
+        ("preference_mute_bypass_sw_mode", "Mode du pied Mute/Bypass"),
+    ]),
+    ("Mode manuel", [
+        *[(f"manual_number{n}", f"Number {n} commande la loop") for n in range(1, 9)],
+        ("tempo_hold", "Garder le tempo"),
+        ("link", "Lien"),
+    ]),
+    ("MIDI", [
+        ("midi_setting_midi_out_mode", "Prise MIDI OUT"),
+        ("midi_setting_rx_ch", "Canal de réception"),
+        ("midi_setting_device_id", "Device ID"),
+        ("midi_setting_sync_clock", "Horloge"),
+        ("midi_setting_clock_out", "Envoi de l'horloge"),
+    ]),
+    ("Divers", [
+        ("others_lcd_contrast", "Contraste de l'écran"),
+        *[(f"others_{k}_polarity", f"Polarité {k.upper()}") for k in ("exp1", "exp2", "ctl1", "ctl2", "ctl3", "ctl4")],
+    ]),
+]
+
+
+def ui_labels() -> dict:
+    """Tout ce dont l'interface a besoin pour afficher des noms plutôt que des nombres."""
+    return {
+        "loops": list(LOOPS),
+        "loop_labels": LOOP_LABELS,
+        "ctl_slots": list(CTL_SLOTS),
+        "ctl_slot_labels": CTL_SLOT_LABELS,
+        "ctl_functions": list(CTL_FUNCTIONS),
+        "ctl_function_labels": CTL_FUNCTION_LABELS,
+        "factory_ctl_func": FACTORY_CTL_FUNC,
+        "assign_sources": list(ASSIGN_SOURCES),
+        "assign_source_labels": ASSIGN_SOURCE_LABELS,
+        "assign_targets": list(ASSIGN_TARGETS),
+        "assign_target_labels": ASSIGN_TARGET_LABELS,
+        "assign_target_values": ASSIGN_TARGET_VALUES,
+        "patch_values": PATCH_VALUE_LABELS,
+        "system_values": SYSTEM_VALUE_LABELS,
+        "system_groups": SYSTEM_GROUPS,
+    }

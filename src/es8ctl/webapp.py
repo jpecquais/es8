@@ -9,9 +9,10 @@ la logique (lecture RQ1 avec relances, décodage, routing) est celle du CLI.
 - `load_syx(data)` : charge un .syx (mode hors ligne) ;
 - `bank_grid()`, `patch_detail(label)`, `system_summary()` : JSON pour l'affichage
   (état de l'appareil avec les modifications en attente appliquées) ;
-- `stage(label, json)`, `stage_system(json)`, `transform_set(...)`,
-  `transform_swap(...)`, `discard(label)` : modifications en attente, validées
-  à chaque ajout ;
+- `stage(label, json)`, `stage_system(json)`, `stage_copy(json)`,
+  `transform_set(...)`, `transform_swap(...)` : modifications en attente,
+  validées à chaque ajout ; `revert(label, field, index)` et `discard(label)`
+  les retirent ;
 - `await write_pending(on_progress)` : écriture vérifiée (relecture + renvoi).
 """
 
@@ -28,18 +29,13 @@ from .codec import (
     split_frames,
     unpack_page,
 )
-from .names import ASSIGN_TARGETS, CTL_FUNCTIONS, CTL_SLOTS, LOOPS
-from .patch import decode_patch, out_of_range
+from .names import ASSIGN_SOURCES, ASSIGN_TARGETS, CTL_FUNCTIONS, CTL_SLOTS, LOOPS
+from .patch import PATCH_FIELDS, decode_patch, out_of_range
 from .request import DEFAULT_IDLE_S, patch_page
 from .routing import render
 from .session import read_pages_async
-from .system import decode_system
-
-ASSIGN_SOURCES = (
-    "CTL1", "CTL2", "CTL3", "CTL4", "MemM", "Mute", "BnkD", "BnkU",
-    "Num1", "Num2", "Num3", "Num4", "Num5", "Num6", "Num7", "Num8",
-    "CNum", "EXP1", "EXP2", "INT", "WAV", "CC",
-)
+from .system import SYSTEM_FIELDS, decode_system
+from .transform import FACTORY_NAME
 
 
 class WebMidiTransport:
@@ -198,6 +194,35 @@ def _merge(target: dict, changes: dict) -> dict:
     return merged
 
 
+def _prune(target: dict) -> dict:
+    """Retire des modifications ce qui est déjà la valeur de l'appareil."""
+    from .codec import CodecError, parse_patch_label
+    from .routing import parse as parse_chain
+
+    patches = {}
+    for label, fields in target["patches"].items():
+        record = state["dump"].patches.get(parse_patch_label(label))
+        device = decode_patch(unpack_page(record)) if record is not None else {}
+        kept = {}
+        for key, value in fields.items():
+            if key == "loop_chain":
+                try:
+                    same = parse_chain(value, base=device["loop_position"]) == device["loop_position"]
+                except (CodecError, KeyError):
+                    same = False
+                if not same:
+                    kept[key] = value
+            elif device.get(key) != value:
+                kept[key] = value
+        if kept:
+            patches[label] = kept
+    system = target["system"]
+    if system and state["dump"].system is not None:
+        device = decode_system(state["dump"].system)
+        system = {k: v for k, v in system.items() if device.get(k) != v}
+    return {"patches": patches, "system": system}
+
+
 def _accept(changes: dict) -> str:
     """Valide (plan complet) puis adopte ; erreur JSON sinon, rien n'est changé."""
     global pending
@@ -209,7 +234,7 @@ def _accept(changes: dict) -> str:
         _plan(candidate)
     except (CodecError, ValueError) as exc:
         return json.dumps({"error": str(exc)})
-    pending = trial
+    pending = _prune(trial)
     _preview_cache.clear()
     return pending_summary()
 
@@ -225,6 +250,52 @@ def stage_system(fields_json: str) -> str:
 def stage_changes(changes_json: str) -> str:
     """Changements au format de `es8ctl apply` (ex. issus d'un fichier ou d'un import .bel)."""
     return _accept(json.loads(changes_json))
+
+
+def stage_copy(pairs_json: str) -> str:
+    """Copie des patchs : [[source, destination], ...], d'après l'état affiché.
+
+    Toutes les sources sont lues avant d'écrire quoi que ce soit : [[a, b], [b, a]]
+    échange deux patchs.
+    """
+    from .codec import CodecError, parse_patch_label
+
+    try:
+        pairs = json.loads(pairs_json)
+        sources = {src: _decoded(parse_patch_label(src)) for src, _ in pairs}
+    except (CodecError, ValueError, TypeError) as exc:
+        return json.dumps({"error": str(exc)})
+    missing = [src for src, fields in sources.items() if fields is None]
+    if missing:
+        return json.dumps({"error": f"Patch absent de l'état affiché : {', '.join(missing)}."})
+    return _accept({"patches": {dst: dict(sources[src]) for src, dst in pairs}})
+
+
+def revert(label: str, field: str, index: int | None = None) -> str:
+    """Retire une modification en attente : un champ, ou un seul élément d'un champ liste."""
+    global pending
+    from .codec import parse_patch_label
+
+    if label == "system":
+        target, original = pending["system"], decode_system(state["dump"].system)
+    else:
+        target = pending["patches"].get(label, {})
+        record = state["dump"].patches.get(parse_patch_label(label))
+        original = decode_patch(unpack_page(record)) if record is not None else {}
+    if field in ("loop_position", "loop_chain"):
+        target.pop("loop_position", None)
+        target.pop("loop_chain", None)
+    elif index is None or not isinstance(target.get(field), list):
+        target.pop(field, None)
+    else:
+        target[field][index] = original[field][index]
+        if target[field] == original[field]:
+            target.pop(field)
+    if label != "system" and not target:
+        pending["patches"].pop(label, None)
+    pending = _prune(pending)
+    _preview_cache.clear()
+    return pending_summary()
 
 
 def transform_set(assignments_json: str, selection: str = "all") -> str:
@@ -269,8 +340,13 @@ def pending_summary() -> str:
     if not (pending["patches"] or pending["system"]) or not state["frames"]:
         return json.dumps({"changes": [], "frames": 0, "estimated_s": 0, "patches": []})
     plan = _plan()
+    changes = [
+        {**c, "old": render(c["old"]), "new": render(c["new"]), "chain": True}
+        if c["field"] == "loop_position" else c
+        for c in plan.changes
+    ]
     return json.dumps({
-        "changes": plan.changes,
+        "changes": changes,
         "frames": len(plan.frames),
         "estimated_s": round(plan.duration_s(DEFAULT_INTERVAL_S, DEFAULT_PAGE_GAP_S)),
         "patches": sorted({c["target"] for c in plan.changes if c["target"] != "system"}),
@@ -339,30 +415,46 @@ async def write_pending(on_progress=None) -> str:
 
 
 def names() -> str:
-    from .names import ASSIGN_TARGETS as TARGETS
+    """Noms, libellés et bornes des champs, pour construire les formulaires."""
+    from .labels import ui_labels
 
     return json.dumps({
-        "loops": LOOPS, "ctl_slots": CTL_SLOTS, "ctl_functions": CTL_FUNCTIONS,
-        "assign_sources": ASSIGN_SOURCES, "assign_targets": TARGETS,
+        **ui_labels(),
+        "patch_ranges": {f.name: [f.lo, f.hi] for f in PATCH_FIELDS},
+        "system_ranges": {f.name: [f.lo, f.hi] for f in SYSTEM_FIELDS},
     })
+
+
+_cell_cache: dict[bytes, dict] = {}  # résumé d'un patch par contenu : seul ce qui change est décodé
+
+
+def _cell(record: bytes) -> dict:
+    if record not in _cell_cache:
+        fields = decode_patch(unpack_page(record))
+        _cell_cache[record] = {
+            "name": fields["name"].rstrip(),
+            "unnamed": fields["name"] == FACTORY_NAME,
+            "chain": render(fields["loop_position"]),
+            "bpm": fields["master_bpm"],
+            "loops": [LOOPS[i] for i, on in enumerate(fields["loop_sw"]) if on],
+        }
+    return _cell_cache[record]
 
 
 def bank_grid() -> str:
     """800 cellules : nom, chaîne, BPM, loops actives."""
+    dump = _preview()
     cells = []
     for index in range(PATCH_COUNT):
-        fields = _decoded(index)
-        if fields is None:
+        record = dump.patches.get(index) if dump else None
+        if record is None:
             cells.append({"patch": patch_label(index), "missing": True})
             continue
         cells.append({
             "patch": patch_label(index),
             "pending": patch_label(index) in pending["patches"],
             "stale": state["source"] == "cache" and patch_page(index) * 2 not in state["fresh"],
-            "name": fields["name"].rstrip(),
-            "chain": render(fields["loop_position"]),
-            "bpm": fields["master_bpm"],
-            "loops": [LOOPS[i] for i, on in enumerate(fields["loop_sw"]) if on],
+            **_cell(record),
         })
     current = None
     if state["dump"] and state["dump"].system is not None:
@@ -403,9 +495,19 @@ def patch_detail(label: str) -> str:
         for i in range(8)
         if fields["midi_tx_ch"][i]
     ]
+    staged = pending["patches"].get(label, {})
+    original = {}
+    if staged:
+        record = state["dump"].patches.get(parse_patch_label(label))
+        device = decode_patch(unpack_page(record))
+        original = {k: device[k] for k in staged if k in device}
+        if "loop_chain" in staged or "loop_position" in staged:
+            original["loop_position"] = device["loop_position"]
+            original["chain"] = render(device["loop_position"])
     return json.dumps({
         "patch": label,
-        "pending": pending["patches"].get(label, {}),
+        "pending": staged,
+        "original": original,
         "name": fields["name"],
         "chain": render(fields["loop_position"]),
         "bpm": fields["master_bpm"],
@@ -424,3 +526,16 @@ def system_summary() -> str:
     if not dump or dump.system is None:
         return json.dumps(None)
     return json.dumps(decode_system(dump.system))
+
+
+def system_detail() -> str:
+    """Réglages système affichés, avec les valeurs de l'appareil pour ceux en attente."""
+    dump = _preview()
+    if not dump or dump.system is None:
+        return json.dumps(None)
+    device = decode_system(state["dump"].system)
+    return json.dumps({
+        "fields": decode_system(dump.system),
+        "pending": pending["system"],
+        "original": {k: device[k] for k in pending["system"] if k in device},
+    })

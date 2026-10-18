@@ -162,3 +162,51 @@ def test_cache_and_on_demand_reads():
     grid = json.loads(webapp.bank_grid())
     assert [c["stale"] for c in grid["cells"][:9]] == [False] * 8 + [True]
     assert grid["fresh_patches"] == 8
+
+
+def test_revert_one_element_and_prune_noops():
+    webapp.load_syx(FIXTURE.read_bytes())
+    webapp.discard()
+    sw = json.loads(webapp.patch_detail("0-8"))["fields"]["loop_sw"]
+    flipped = [1 - v if i in (0, 3) else v for i, v in enumerate(sw)]
+    webapp.stage("0-8", json.dumps({"loop_sw": flipped, "loop_chain": "V12345678"}))
+    detail = json.loads(webapp.patch_detail("0-8"))
+    assert detail["original"]["chain"] == "V87465321" and detail["original"]["loop_sw"] == sw
+    webapp.revert("0-8", "loop_sw", 0)  # un seul élément
+    assert json.loads(webapp.patch_detail("0-8"))["fields"]["loop_sw"][0] == sw[0]
+    webapp.revert("0-8", "loop_position")  # l'ordre de la chaîne, quelle que soit sa forme
+    assert json.loads(webapp.patch_detail("0-8"))["chain"] == "V87465321"
+    webapp.revert("0-8", "loop_sw", 3)
+    assert json.loads(webapp.pending_summary())["patches"] == []
+    # Remettre une valeur à celle de l'appareil retire la modification.
+    bpm = json.loads(webapp.patch_detail("0-7"))["bpm"]
+    webapp.stage("0-7", json.dumps({"master_bpm": bpm + 1}))
+    assert json.loads(webapp.stage("0-7", json.dumps({"master_bpm": bpm})))["patches"] == []
+    assert json.loads(webapp.bank_grid())["cells"][6]["pending"] is False
+
+
+def test_stage_copy_exchanges_patches():
+    webapp.load_syx(FIXTURE.read_bytes())
+    webapp.discard()
+    a, b = (json.loads(webapp.patch_detail(x))["name"] for x in ("0-8", "1-1"))
+    summary = json.loads(webapp.stage_copy(json.dumps([["0-8", "1-1"], ["1-1", "0-8"]])))
+    assert summary["patches"] == ["0-8", "1-1"]
+    assert json.loads(webapp.patch_detail("0-8"))["name"] == b
+    assert json.loads(webapp.patch_detail("1-1"))["name"] == a
+    assert "error" in json.loads(webapp.stage_copy(json.dumps([["99-8", "0-1"]])))  # 99-8 incomplet ici
+    webapp.discard()
+
+
+def test_labels_and_system_detail():
+    names = json.loads(webapp.names())
+    assert len(names["assign_target_labels"]) == 46 and names["patch_values"]["output_select"][2] == "1 et 2"
+    assert names["ctl_functions"][names["factory_ctl_func"][14]] == "CTL_3"  # CTL In 3 → CTL 3 en usine
+    assert names["patch_ranges"]["master_bpm"][0] == 20
+    webapp.load_syx(FIXTURE.read_bytes())
+    webapp.discard()
+    rx = json.loads(webapp.system_detail())["fields"]["midi_setting_rx_ch"]
+    webapp.stage_system(json.dumps({"midi_setting_rx_ch": (rx + 1) % 16}))
+    sys_detail = json.loads(webapp.system_detail())
+    assert sys_detail["original"] == {"midi_setting_rx_ch": rx}
+    webapp.revert("system", "midi_setting_rx_ch")
+    assert json.loads(webapp.pending_summary())["frames"] == 0

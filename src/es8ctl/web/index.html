@@ -4,76 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>es8ctl</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
   <link rel="stylesheet" href="style.css">
   <script src="https://cdn.jsdelivr.net/pyodide/v0.27.7/full/pyodide.js"></script>
 </head>
 <body>
-  <header>
-    <div class="brand">
-      <strong>es8ctl</strong>
-      <span class="sub">éditeur libre pour ES-8</span>
-    </div>
-    <div class="toolbar">
-      <label>Sortie <select id="midi-out" disabled></select></label>
-      <label>Entrée <select id="midi-in" disabled></select></label>
-      <button id="btn-read" data-off="1" disabled>Lire l'appareil</button>
-      <label class="button">Ouvrir un .syx<input id="file-syx" type="file" accept=".syx" hidden></label>
-      <button id="btn-save" data-off="1" disabled>Enregistrer .syx</button>
-      <details class="menu">
-        <summary class="button">Sauvegardes (<span id="backup-count">0</span>)</summary>
-        <div class="menu-body">
-          <p class="muted">Faites automatiquement avant chaque écriture (5 dernières, dans ce navigateur).</p>
-          <ul id="backup-list"></ul>
-        </div>
-      </details>
-    </div>
-  </header>
-
-  <div id="status-bar">
-    <span id="status">Chargement du moteur Python…</span>
-    <progress id="progress" max="1" value="0" hidden></progress>
-  </div>
-
-  <div id="pending-bar" hidden>
-    <span id="pending-text"></span>
-    <button id="btn-toggle-pending" class="link">détail</button>
-    <span class="spacer"></span>
-    <button id="btn-discard" data-off="1">Tout annuler</button>
-    <button id="btn-write" data-off="1" class="primary">Écrire sur l'ES-8</button>
-    <ul id="pending-list" hidden></ul>
-  </div>
-
-  <main>
-    <section id="banks">
-      <div class="banks-head">
-        <input id="filter" type="search" placeholder="Filtrer par nom…" disabled>
-        <span id="source"></span>
-      </div>
-      <details id="transforms" class="transforms" hidden>
-        <summary>Transformations en masse</summary>
-        <div class="transform">
-          <label>Affecter <small>(une par ligne : <code>ctl_func[NUM_8]=BPM</code>, <code>master_bpm=120</code>…)</small>
-            <textarea id="set-assign" rows="2" spellcheck="false"></textarea></label>
-          <label>Patchs <input id="set-scope" placeholder="all, 0-1..9-8, 0-1,2-3" value="all"></label>
-          <button id="btn-set">Ajouter</button>
-        </div>
-        <div class="transform">
-          <label>Échanger les loops <select id="swap-a"></select> ↔ <select id="swap-b"></select></label>
-          <label>Patchs <input id="swap-scope" value="all"></label>
-          <button id="btn-swap">Ajouter</button>
-          <small class="muted">Interrupteurs, carry-over, assigns et place dans la chaîne : pour un échange de câbles.</small>
-        </div>
-      </details>
-      <div id="grid" class="grid empty">
-        <p class="hint">Lisez l'appareil ou ouvrez un fichier .syx.</p>
-      </div>
-    </section>
-
-    <section id="detail" class="empty">
-      <p class="hint">Sélectionnez un patch.</p>
-    </section>
-  </main>
-
-  <script src="app.js"></script>
+  <div id="root"></div>
+  <script type="module" src="app.js"></script>
 </body>
 </html>

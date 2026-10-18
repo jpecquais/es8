@@ -27,20 +27,27 @@ Le navigateur parle à l'ES-8 par Web MIDI ; la logique est la même
 bibliothèque Python, exécutée dans la page par Pyodide (rien n'est envoyé à
 un serveur). Accepter l'accès MIDI « avec SysEx » demandé par le navigateur.
 
-- lecture de l'appareil ou d'un `.syx`, grille des 800 patchs, fiche détaillée
-  (chaîne dessinée comme sur l'écran, loops, assigns, MIDI) ;
-- édition d'un patch (nom, tempo, chaîne, loops, carry-over, assigns, MIDI,
-  fonctions des contrôleurs, tout autre champ en JSON) et transformations en
-  masse (affectation, échange de loops) : modifications en attente, validées
-  à l'ajout, visibles dans la grille ;
-- écriture vérifiée (relecture et renvoi, comme `apply --confirm`), précédée
-  d'une sauvegarde automatique dans le navigateur (5 dernières) et d'une
-  relecture des seuls patchs visés : les changements s'appliquent sur l'état
-  actuel de l'appareil, jamais sur une lecture ancienne ;
-- dernière lecture gardée par le navigateur et affichée au démarrage (données
-  anciennes en italique) ; clic sur un numéro de banque = relire ses 8 patchs
-  (~2 s), bouton « Relire » dans la fiche d'un patch. Lecture complète :
-  ~2 min 20, rythme imposé par l'ES-8.
+Trois zones : la liste des patchs à gauche (banques non nommées repliées,
+recherche, ↑/↓), le patch au centre, les modifications en attente à droite.
+
+- **Patch** : tout se modifie sur place. Chaîne dessinée en boîtes (clic =
+  allumer, glisser = déplacer, ∥ entre deux loops = parallèle, CO =
+  carry-over, notation de l'écran saisissable au clavier) ; pédalier disposé
+  comme les pieds, chaque pied affichant sa fonction et les assigns qu'il
+  déclenche ; assigns et messages MIDI réduits à ceux qui servent ; réglages
+  avancés repliés (entrée/sortie, LED, tout champ en JSON).
+- **Bibliothèque** : sélection de patchs (Maj, ⌘/Ctrl), puis fonction d'un pied,
+  tempo, échange de loops, copie vers une autre place ; glisser un patch sur
+  un autre les échange.
+- **Système** : options de jeu, préférences, mode manuel, MIDI.
+- **Modifications** : regroupées par patch, avant → après, annulables une par
+  une. « Écrire » relit d'abord les seuls patchs visés (les changements
+  s'appliquent sur l'état actuel de l'appareil), sauvegarde l'état dans le
+  navigateur (5 dernières), envoie, puis vérifie par relecture et renvoie ce
+  qui manque (comme `apply --confirm`).
+- La dernière lecture est gardée par le navigateur et affichée au démarrage
+  (patchs pas relus en italique) ; « Relire » sur une banque ou un patch
+  (~2 s par banque). Lecture complète : ~2 min 20, rythme imposé par l'ES-8.
 
 ## Lire l'ES-8
 
@@ -119,7 +126,8 @@ src/es8ctl/
   live.py         # commandes directes (sélection, renommage, copie, échange, init.)
   session.py      # dialogue avec l'ES-8 indépendant du transport (mido / Web MIDI)
   webapp.py       # pont navigateur (Pyodide) ↔ bibliothèque
-  web/            # interface web : index.html, app.js (Web MIDI + affichage), style.css
+  labels.py       # libellés des valeurs pour l'interface (d'après l'éditeur officiel)
+  web/            # interface web : app.js (Preact + htm), engine.js (Pyodide, Web MIDI), chain.js, describe.js
   apply.py        # changements JSON → pages → trames (validation, sans MIDI)
   transfer.py     # envoi MIDI vers l'ES-8 (seul module émetteur)
   codec/

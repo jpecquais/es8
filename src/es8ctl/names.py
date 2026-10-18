@@ -39,6 +39,15 @@ ASSIGN_TARGETS = (
 )
 assert len(ASSIGN_TARGETS) == 46
 
+# Valeurs de assign_source (0-21), ordre de l'éditeur officiel. CC = CC MIDI reçu,
+# dont le numéro est dans assign_int_pedal_trigger_cc (champ partagé avec INT).
+ASSIGN_SOURCES = (
+    "CTL1", "CTL2", "CTL3", "CTL4", "MEM_M", "MUTE", "BANK_D", "BANK_U",
+    "NUM1", "NUM2", "NUM3", "NUM4", "NUM5", "NUM6", "NUM7", "NUM8",
+    "CNUM", "EXP1", "EXP2", "INT", "WAV", "CC",
+)
+assert len(ASSIGN_SOURCES) == 22
+
 # Noms d'index par champ (champs listes) ; noms de valeurs par champ.
 INDEX_NAMES: dict[str, tuple[str, ...]] = {
     "loop_sw": LOOPS,
@@ -51,6 +60,7 @@ INDEX_NAMES: dict[str, tuple[str, ...]] = {
 VALUE_NAMES: dict[str, tuple[str, ...]] = {
     "ctl_func": CTL_FUNCTIONS,
     "assign_target": ASSIGN_TARGETS,
+    "assign_source": ASSIGN_SOURCES,
 }
 
 
