@@ -11,7 +11,7 @@ apportées par la recherche initiale, et la séquence de travail.
 | 0 — Session hardware n°1 | ✅ | Dump initié au panneau ; 1616 trames ; fixture n°1 |
 | 1 — Noyau offline | ✅ | Format complet décodé, identique à la base de paramètres de l'éditeur officiel ; round-trip bit à bit ; schéma JSON aligné `.bel` |
 | 2 — CLI v1 | ✅ | `capture`, `diff`, `patches`, `system`, `apply` (dry-run / `--write`, backup), `verify`, `check` ; écriture vérifiée sur l'ES-8 |
-| 3 — Transformations en masse | ✅ en partie | `transform set` / `swap-loops` / `variants` ; variantes vérifiées sur l'appareil (50/50), tap tempo et swap 6↔7 à écrire |
+| 3 — Transformations en masse | ✅ | Les 3 cas d'usage écrits et vérifiés sur l'appareil : 50 variantes, tap tempo sur 800 patchs, échange 6 ↔ 7 sur 800 patchs (`apply --confirm`) |
 | 4 — Temps réel | 🟡 | Protocole de l'éditeur officiel lu dans son code : lecture à distance (`es8ctl read`) opérationnelle ; commandes `7F xx` (renommer, copier, échanger…) connues, à exposer |
 | 5 — GUI / contrat agent | 🟡 | Contrat agent rédigé (`docs/agent-contract.md`) ; GUI non commencée |
 

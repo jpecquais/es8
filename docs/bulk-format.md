@@ -132,6 +132,18 @@ Le WIDI répond lui-même à la requête d'identité universelle
 (Mac ↔ WIDI), pas de la prise DIN ni de l'ES-8. Les premiers essais RQ1
 semblaient sans réponse : ils avaient été faits sur l'écran Bulk Dump.
 
+### Transformations en masse sur l'appareil (2026-10-18)
+
+| Opération | Pages | 1er passage | Après renvoi |
+|---|---|---|---|
+| 50 variantes de 0-8 (10-1 … 16-2) | 50 | 6 + 44 (écran de jeu) | 50 / 50 |
+| Tap tempo (`ctl_func[NUM_8]=BPM`) partout | 800 | 787 | 800 / 800 (renvoi manuel, puis `--confirm`) |
+| Échange des loops 6 ↔ 7 partout | 800 | 785 | 800 / 800 (`--confirm`, 2 tours) |
+
+Chaque résultat vérifié par une relecture complète (`es8ctl read`) identique
+au dump attendu. Perte typique via WIDI : 1,6–1,9 % des pages au premier
+passage, à 0,5 s entre pages.
+
 ### Protocole de l'éditeur officiel (lu dans son code, vérifié sur l'appareil)
 
 L'éditeur macOS (ES-8 Editor 1.02) est une application web : sa logique
@@ -182,9 +194,8 @@ systématique par re-dump.
 Écrire : l'ES-8 sur l'écran de jeu (EXIT après un dump au panneau). Lire :
 `es8ctl read`, aucun geste requis.
 
-1. Écrire les transformations en masse (tap tempo partout, échange 6 ↔ 7)
-   et vérifier par `es8ctl read` + `es8ctl check`.
-2. Tester un rythme d'écriture plus rapide (`--page-gap 0.2`).
+1. ~~Transformations en masse~~ : faites et vérifiées.
+2. Tester un rythme d'écriture plus rapide (`--page-gap 0.2`) avec `--confirm`.
 3. Édition en temps réel : les commandes `7F xx` de l'éditeur (renommer,
    copier, échanger, changer de patch) sont connues ; aucune adresse de
    paramètre individuel n'existe — l'éditeur réécrit des pages entières.
