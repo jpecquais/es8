@@ -199,7 +199,7 @@ def test_stage_copy_exchanges_patches():
 
 def test_labels_and_system_detail():
     names = json.loads(webapp.names())
-    assert len(names["assign_target_labels"]) == 46 and names["patch_values"]["output_select"][2] == "1 et 2"
+    assert len(names["assign_target_labels"]) == 46 and names["patch_values"]["output_select"][2] == "1 & 2"
     assert names["ctl_functions"][names["factory_ctl_func"][14]] == "CTL_3"  # CTL In 3 → CTL 3 en usine
     assert names["patch_ranges"]["master_bpm"][0] == 20
     webapp.load_syx(FIXTURE.read_bytes())

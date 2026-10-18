@@ -267,7 +267,7 @@ def stage_copy(pairs_json: str) -> str:
         return json.dumps({"error": str(exc)})
     missing = [src for src, fields in sources.items() if fields is None]
     if missing:
-        return json.dumps({"error": f"Patch absent de l'état affiché : {', '.join(missing)}."})
+        return json.dumps({"error": f"Patch not loaded: {', '.join(missing)}."})
     return _accept({"patches": {dst: dict(sources[src]) for src, dst in pairs}})
 
 
@@ -375,7 +375,7 @@ async def write_pending(on_progress=None) -> str:
     targets = sorted({parse_es8_bulk_frame(f).counter // 2 for f in plan.frames})
     fresh, missing = await read_pages_async(transport, targets, on_progress=report("refresh"))
     if missing:
-        return json.dumps({"confirmed": False, "error": "Relecture préalable incomplète : rien n'a été écrit.",
+        return json.dumps({"confirmed": False, "error": "Could not re-read the target patches first: nothing was written.",
                            "history": [], "not_confirmed": [], "frames": 0})
     changed_on_device = sorted(
         patch_label(p - 8) if p >= 8 else "system"
@@ -388,7 +388,7 @@ async def write_pending(on_progress=None) -> str:
         pending = {"patches": {}, "system": {}}
         _preview_cache.clear()
         return json.dumps({"confirmed": True, "history": [], "not_confirmed": [], "frames": 0,
-                           "changed_on_device": changed_on_device, "note": "Déjà à jour sur l'appareil."})
+                           "changed_on_device": changed_on_device, "note": "Already up to date on the ES-8."})
 
     # 2. Écrire, relire, renvoyer.
     result = await write_confirmed_async(

@@ -38,6 +38,7 @@ from .codec import (
 )
 from .patch import decode_patch, encode_patch
 from .routing import parse as parse_chain
+from .routing import problems as routing_problems
 from .system import SYSTEM_PAGES, decode_system, encode_system
 
 # Spec Roland : au moins 50 ms entre deux messages. Marge de sécurité.
@@ -101,6 +102,15 @@ def _with_positions(page: bytes, fields: dict) -> dict:
     return fields
 
 
+def _check_routing(label: str, before: dict, after: dict, stereo: tuple[bool, bool]) -> None:
+    """Refuse une chaîne que l'ES-8 ne sait pas faire, si la modification la crée."""
+    new = set(routing_problems(after["loop_position"], after["carry_over_loop"], *stereo)) - set(
+        routing_problems(before["loop_position"], before["carry_over_loop"], *stereo)
+    )
+    if new:
+        raise CodecError(f"{label}: {' '.join(sorted(new))}")
+
+
 def plan_changes(base_frames: list[bytes], changes: dict) -> Plan:
     """Construit le plan d'écriture. Lève CodecError au moindre problème."""
     if not isinstance(changes, dict) or set(changes) - {"patches", "system"}:
@@ -129,6 +139,10 @@ def plan_changes(base_frames: list[bytes], changes: dict) -> Plan:
     patch_changes = changes.get("patches") or {}
     if not isinstance(patch_changes, dict):
         raise CodecError('"patches": expected an object {"bank-number": {field: value}}.')
+    stereo = (False, False)
+    if dump.system is not None:
+        sys_now = decode_system(encode_system(dump.system, system_changes) if system_changes else dump.system)
+        stereo = (bool(sys_now["preference_loop7_return_mode"]), bool(sys_now["preference_loop8_return_mode"]))
     for label in sorted(patch_changes, key=parse_patch_label):
         index = parse_patch_label(label)
         if index not in dump.patches:
@@ -136,6 +150,7 @@ def plan_changes(base_frames: list[bytes], changes: dict) -> Plan:
         record = dump.patches[index]
         page = unpack_page(record)
         edited = encode_patch(page, _with_positions(page, patch_changes[label]))
+        _check_routing(label, decode_patch(page), decode_patch(edited), stereo)
         diffs += _field_changes(patch_label(index), decode_patch(page), decode_patch(edited))
         if edited != page:
             frames += _page_frames(PATCH_FIRST_COUNTER + index * PATCH_FRAMES, pack_page(edited))

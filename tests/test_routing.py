@@ -125,3 +125,31 @@ def test_variants_keep_parallel_structure(dump):
 def test_variants_rejects(dump, kwargs):
     with pytest.raises(CodecError):
         op_variants(dump, **kwargs)
+
+
+def test_hardware_constraints():
+    from es8ctl.routing import mixers_used, problems
+
+    none = [0] * 9
+    assert problems(parse("V8746(3//5)21"), none) == []
+    assert problems(parse("V8746(//5)321"), none) == []  # MIX avec une branche sèche
+    assert mixers_used(parse("(1//2)(3//4)V5678"), none) == 2
+    carry = [1, 0, 0, 0, 0, 0, 0, 0, 0]
+    assert "mixers" in problems(parse("(1//2)(3//4)V5678"), carry)[0]  # 2 MIX + 1 carry-over
+    assert mixers_used(parse("V87654321"), [0, 0, 0, 0, 0, 0, 1, 0, 0], stereo7=True) == 2  # L7 stéréo
+    assert problems(parse("[1//2]V345678"), none) == []  # SEPARATE en début de chaîne
+    assert "SEPARATE" in problems(parse("V[1//2]345678"), none)[0]
+    assert problems(parse("8[1//2]V34567"), none, stereo8=True) == []  # après la loop 8 stéréo
+    assert "contain" in problems(parse("V(1(2//3)//4)5678"), none)[0]
+
+
+def test_plan_refuses_impossible_routing():
+    import pytest
+
+    from es8ctl.apply import plan_changes
+    from es8ctl.codec import CodecError, split_frames
+
+    frames = list(split_frames((Path(__file__).parent / "fixtures" / "es8_bulk_session2_name_A.syx").read_bytes()))
+    with pytest.raises(CodecError, match="SEPARATE"):
+        plan_changes(frames, {"patches": {"0-8": {"loop_chain": "V[1//2]345678"}}})
+    plan_changes(frames, {"patches": {"0-8": {"loop_chain": "[1//2]V345678"}}})

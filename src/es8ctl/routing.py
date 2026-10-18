@@ -171,3 +171,75 @@ def swap_loops(positions: list[int], a: int, b: int) -> list[int]:
     _check(positions)
     swap = {a: b, b: a}
     return [swap.get(v, v) if v <= 8 else v for v in positions]
+
+
+# ---------------------------------------------------------------- contraintes matérielles
+#
+# Règles de l'éditeur officiel (loop_structure_handle.js), traduites dans
+# l'ordre de la liste (ordre du signal depuis l'entrée) :
+# - jeu 10-12 = MIX (deux branches mélangées), jeu 13-15 = SEPARATE ;
+# - pas de bloc dans un bloc ;
+# - un SEPARATE commence en début de chaîne, ou juste après la loop 8 quand
+#   son retour est stéréo ;
+# - l'ES-8 n'a que 2 mixers, partagés entre les blocs MIX et le carry-over :
+#   une loop en carry-over en prend 1 (2 pour les loops 7 et 8 en retour
+#   stéréo), un bloc MIX en prend 1, et 1 de plus quand une branche commence
+#   par une loop stéréo dans les cas listés dans `_mix_cost`.
+MIXERS = 2
+
+
+def _blocks(seq: list[int]) -> list[dict]:
+    """Blocs de premier niveau : {kind, start, branches: [[...], [...]], before}."""
+    out, i = [], 0
+    while i < len(seq):
+        token = seq[i]
+        if token in (OPEN_A, OPEN_B):
+            sep, close = (SEP_A, CLOSE_A) if token == OPEN_A else (SEP_B, CLOSE_B)
+            j = seq.index(close, i)
+            split = seq.index(sep, i)
+            out.append({
+                "kind": "mix" if token == OPEN_A else "separate",
+                "start": i,
+                "branches": [seq[i + 1 : split], seq[split + 1 : j]],
+                "before": seq[i - 1] if i else None,
+            })
+            i = j + 1
+        else:
+            i += 1
+    return out
+
+
+def _mix_cost(block: dict, stereo7: bool, stereo8: bool) -> int:
+    firsts = {branch[0] for branch in block["branches"] if branch}
+    extra = (
+        (stereo7 and stereo8 and block["before"] == 8 and 7 in firsts)
+        or (stereo8 and block["before"] is None and 8 in firsts)
+        or (stereo7 and block["before"] is None and 7 in firsts)
+    )
+    return 1 + int(extra)
+
+
+def mixers_used(positions: list[int], carry_over: list[int], stereo7: bool = False, stereo8: bool = False) -> int:
+    """Mixers consommés par la chaîne et le carry-over (2 disponibles)."""
+    used = 0
+    for i, on in enumerate(carry_over):  # index 0-7 = L1-L8, 8 = V
+        if on:
+            used += 2 if (i == 6 and stereo7) or (i == 7 and stereo8) else 1
+    return used + sum(_mix_cost(b, stereo7, stereo8) for b in _blocks(chain(positions)) if b["kind"] == "mix")
+
+
+def problems(positions: list[int], carry_over: list[int], stereo7: bool = False, stereo8: bool = False) -> list[str]:
+    """Ce que l'ES-8 ne sait pas faire dans cette chaîne (liste vide si tout va bien)."""
+    seq = chain(positions)
+    out = []
+    blocks = _blocks(seq)
+    if any(t >= OPEN_A for b in blocks for branch in b["branches"] for t in branch):
+        out.append("A parallel block cannot contain another block.")
+    for b in blocks:
+        if b["kind"] == "separate" and not (b["before"] is None or (b["before"] == 8 and stereo8)):
+            out.append("A SEPARATE block must start the chain (or follow loop 8 when its return is stereo).")
+            break
+    used = mixers_used(positions, carry_over, stereo7, stereo8)
+    if used > MIXERS:
+        out.append(f"This needs {used} mixers but the ES-8 has {MIXERS} (each MIX block and each carry-over loop uses one).")
+    return out
