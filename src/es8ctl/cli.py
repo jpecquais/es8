@@ -411,36 +411,30 @@ def apply(
         })
         return
 
-    from .apply import pending_pages
-    from .codec import parse_es8_bulk_frame
-    from .request import read_pages
+    import asyncio
+
+    import mido
+
+    from .session import MidoTransport, write_confirmed_async
 
     listen = resolve_port(port_in or port, list_ports())
     if listen is None:
         _fail(2, **report, error=f"Port d'écoute introuvable : {port_in or port}")
-    todo = [plan.frames[i : i + 2] for i in range(0, len(plan.frames), 2)]
-    history = []
-    for round_no in range(1, rounds + 1):
-        pages = sorted({parse_es8_bulk_frame(p[0]).counter // 2 for p in todo})
-        typer.echo(f"Relecture de {len(pages)} page(s) (tour {round_no})…", err=True)
-        device, _ = read_pages(port, listen, pages)
-        todo = pending_pages([f for p in todo for f in p], device)
-        history.append({"round": round_no, "checked": len(pages), "pending": len(todo)})
-        if not todo:
-            break
-        typer.echo(f"{len(todo)} page(s) non conforme(s) : renvoi.", err=True)
-        try:
-            send_frames(port, [f for p in todo for f in p], interval_s=interval, page_gap_s=page_gap)
-        except (KeyboardInterrupt, Exception) as exc:
-            _fail(3, **report, confirm=history, error=f"Renvoi interrompu : {exc!r}")
-    else:
-        pages = sorted({parse_es8_bulk_frame(p[0]).counter // 2 for p in todo})
-        device, _ = read_pages(port, listen, pages)
-        todo = pending_pages([f for p in todo for f in p], device)
-        history.append({"round": "final", "checked": len(pages), "pending": len(todo)})
-    labels = sorted({patch_label(parse_es8_bulk_frame(p[0]).counter // 2 - 8)
-                     if parse_es8_bulk_frame(p[0]).counter >= 16 else "système" for p in todo})
-    _print_json({**report, "confirmed": not todo, "confirm": history, "not_confirmed": labels})
+    def phase_progress(phase: str, n: int, total: int) -> None:
+        typer.echo(f"\r{phase} {n}/{total}   ", err=True, nl=False)
+
+    with mido.open_input(listen) as inp, mido.open_output(port) as out:
+        for _ in inp.iter_pending():
+            pass
+        result = asyncio.run(write_confirmed_async(
+            MidoTransport(inp, out), plan.frames, interval, page_gap, rounds, phase_progress,
+            already_sent=True,
+        ))
+    typer.echo("", err=True)
+    todo = result["pending_counters"]
+    labels = sorted({patch_label(c // 2 - 8) if c >= 16 else "système" for c in todo})
+    _print_json({**report, "confirmed": result["confirmed"], "confirm": result["history"],
+                 "not_confirmed": labels})
     if todo:
         raise typer.Exit(code=1)
 

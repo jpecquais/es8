@@ -117,3 +117,53 @@ ul { margin: 0; padding-left: 18px; }
 .hint { color: var(--muted); padding: 16px; }
 details { margin-top: 18px; }
 pre { font-size: 11px; max-height: 320px; overflow: auto; background: var(--bg); padding: 8px; border-radius: 4px; }
+
+/* ---- édition, modifications en attente, transformations ---- */
+button.primary, #btn-write { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.link { border: none; background: none; color: var(--accent); padding: 0 4px; text-decoration: underline; }
+code { font-size: 12px; background: var(--bg); padding: 0 3px; border-radius: 3px; }
+
+#pending-bar {
+  display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 8px 16px;
+  background: var(--accent-soft); border-bottom: 1px solid var(--line);
+}
+#pending-bar .spacer { flex: 1; }
+#pending-list { flex-basis: 100%; margin: 4px 0 0; max-height: 200px; overflow: auto; font-size: 12px; }
+#pending-list .no { color: var(--muted); font-variant-numeric: tabular-nums; }
+main { height: auto; min-height: calc(100vh - 110px); }
+
+.cell.pending { box-shadow: inset 3px 0 0 var(--accent); }
+.pending-note { color: var(--accent); font-size: 12px; }
+
+.menu { position: relative; }
+.menu summary { list-style: none; }
+.menu summary::-webkit-details-marker { display: none; }
+.menu-body {
+  position: absolute; right: 0; top: 110%; z-index: 5; width: 280px; padding: 10px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+}
+.menu-body ul { padding-left: 16px; }
+.menu-body a { color: var(--accent); }
+
+.transforms { border-bottom: 1px solid var(--line); padding: 8px 10px; }
+.transforms summary { cursor: pointer; color: var(--muted); }
+.transform { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; padding: 8px 0; border-top: 1px dashed var(--line); }
+.transform label { display: flex; flex-direction: column; gap: 4px; color: var(--muted); font-size: 12px; }
+.transform textarea { width: 340px; max-width: 100%; }
+textarea, input:not([type]), input[type="number"] {
+  font: inherit; color: var(--text); background: var(--bg);
+  border: 1px solid var(--line); border-radius: var(--radius); padding: 5px 8px;
+}
+
+.detail-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+#editor .field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; color: var(--muted); font-size: 12px; }
+#editor .field input { font-size: 14px; }
+#editor small { color: var(--muted); }
+.toggles { display: flex; flex-wrap: wrap; gap: 4px; }
+.toggle { display: inline-flex; align-items: center; gap: 3px; padding: 3px 6px; border: 1px solid var(--line); border-radius: 4px; font-size: 12px; }
+.toggle:has(input:checked) { border-color: var(--accent); }
+table.edit select, table.edit input[type="number"] { width: 100%; min-width: 0; padding: 2px 4px; font-size: 12px; }
+table.edit input[type="number"] { width: 64px; }
+#editor textarea { width: 100%; }
+.actions { display: flex; gap: 8px; margin-top: 16px; position: sticky; bottom: 0; background: var(--panel); padding: 8px 0; }

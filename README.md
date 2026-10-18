@@ -25,9 +25,16 @@ es8ctl web          # ouvre http://localhost:8765 (Chrome, Edge ou Opera)
 
 Le navigateur parle à l'ES-8 par Web MIDI ; la logique est la même
 bibliothèque Python, exécutée dans la page par Pyodide (rien n'est envoyé à
-un serveur). Version actuelle : lecture de l'appareil ou d'un `.syx`, grille
-des 800 patchs, fiche détaillée (chaîne, loops, assigns, MIDI). Accepter
-l'accès MIDI « avec SysEx » demandé par le navigateur.
+un serveur). Accepter l'accès MIDI « avec SysEx » demandé par le navigateur.
+
+- lecture de l'appareil ou d'un `.syx`, grille des 800 patchs, fiche détaillée
+  (chaîne dessinée comme sur l'écran, loops, assigns, MIDI) ;
+- édition d'un patch (nom, tempo, chaîne, loops, carry-over, assigns, MIDI,
+  fonctions des contrôleurs, tout autre champ en JSON) et transformations en
+  masse (affectation, échange de loops) : modifications en attente, validées
+  à l'ajout, visibles dans la grille ;
+- écriture vérifiée (relecture et renvoi, comme `apply --confirm`), précédée
+  d'une sauvegarde automatique dans le navigateur (5 dernières).
 
 ## Lire l'ES-8
 

@@ -148,3 +148,46 @@ class MidoTransport:
             if time.monotonic() >= deadline:
                 return None
             await asyncio.sleep(0.002)
+
+
+async def write_confirmed_async(
+    transport: Transport,
+    frames: list[bytes],
+    interval_s: float,
+    page_gap_s: float,
+    rounds: int = 3,
+    on_progress: Callable[[str, int, int], None] | None = None,
+    sleep: Sleep = asyncio.sleep,
+    already_sent: bool = False,
+) -> dict:
+    """Écrit des pages puis les relit (RQ1) et renvoie les non conformes, jusqu'à `rounds` tours.
+
+    `on_progress(phase, n, total)` : phase « send », « read » ou « resend ».
+    `already_sent` : l'envoi initial a déjà eu lieu (CLI) ; ne faire que vérifier.
+    Rend {"confirmed", "history", "pending_counters"} — `pending_counters` :
+    premier ID de message de chaque page restée non conforme.
+    """
+    from .apply import pending_pages
+
+    def report(phase):
+        return (lambda n, t: on_progress(phase, n, t)) if on_progress else None
+
+    if not already_sent:
+        await send_frames_async(transport, frames, interval_s, page_gap_s, report("send"), sleep)
+    todo = [frames[i : i + PATCH_FRAMES] for i in range(0, len(frames), PATCH_FRAMES)]
+    history = []
+    for round_no in range(1, rounds + 2):
+        pages = sorted({parse_es8_bulk_frame(p[0]).counter // PATCH_FRAMES for p in todo})
+        device, _ = await read_pages_async(transport, pages, on_progress=report("read"), sleep=sleep)
+        todo = pending_pages([f for p in todo for f in p], device)
+        history.append({"round": round_no, "checked": len(pages), "pending": len(todo)})
+        if not todo or round_no > rounds:
+            break
+        await send_frames_async(
+            transport, [f for p in todo for f in p], interval_s, page_gap_s, report("resend"), sleep
+        )
+    return {
+        "confirmed": not todo,
+        "history": history,
+        "pending_counters": [parse_es8_bulk_frame(p[0]).counter for p in todo],
+    }
