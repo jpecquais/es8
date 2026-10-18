@@ -51,8 +51,8 @@ DEFAULT_PAGE_GAP_S = 0.25
 # Dump (où il reste après un dump déclenché au panneau), l'ES-8 ignore
 # silencieusement tout bulk dump reçu.
 DEVICE_PRECONDITION = (
-    "L'ES-8 doit être sur l'écran de jeu : après un dump au panneau, quitter "
-    "l'écran Bulk Dump (EXIT), sinon les pages reçues sont ignorées sans erreur."
+    "The ES-8 must be on its play screen: after a dump from the panel, leave "
+    "the Bulk Dump screen (EXIT), otherwise it silently ignores the pages it receives."
 )
 
 
@@ -194,7 +194,7 @@ def check_changes(actual_frames: list[bytes], changes: dict) -> dict:
         compare(label, decode_patch(page), wanted)
     if changes.get("system"):
         if dump.system is None:
-            results.append({"target": "system", "applied": None, "error": "bloc système absent"})
+            results.append({"target": "system", "applied": None, "error": "no system block"})
         else:
             compare("system", decode_system(dump.system), changes["system"])
     applied = [r["target"] for r in results if r["applied"]]

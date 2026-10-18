@@ -196,8 +196,8 @@ def _save(
         "port": port,
         "address_size_assumed": address_size,
         "note": (
-            "address_size est une hypothèse (4 par défaut, matériel Roland récent) ; "
-            "le hex brut permet un re-décodage sans perte."
+            "address_size is an assumption (4 by default, recent Roland hardware); "
+            "the raw hex allows lossless re-decoding."
         ),
         "frame_count": len(frames),
         "ignored_message_count": ignored,

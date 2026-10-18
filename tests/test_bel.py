@@ -40,7 +40,7 @@ def test_export_shape(document):
 
 def test_export_reconstructs_truncated_last_patch(dump):
     _, warnings = export_bel(dump, frames_by_counter(list(split_frames(FIXTURE.read_bytes()))))
-    assert any(w.startswith("99-8") and "identique" in w for w in warnings)
+    assert any(w.startswith("99-8") and "identical" in w for w in warnings)
 
 
 def test_roundtrip_is_empty(document, dump):

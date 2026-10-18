@@ -26,7 +26,7 @@ from .codec import split_frames
 
 app = typer.Typer(
     add_completion=False,
-    help="Éditeur open-source pour le Boss ES-8. Read-only tant qu'il n'existe pas de sous-commande d'écriture.",
+    help="Open-source editor for the BOSS ES-8. Output is JSON; nothing is sent to the ES-8 without --write.",
 )
 
 
@@ -45,13 +45,13 @@ def _dump_result(result: CaptureResult) -> dict:
 
 
 def _progress(received: int, counter: int | None) -> None:
-    where = f"compteur {counter}/{BULK_LAST_COUNTER}" if counter is not None else "trame non ES-8"
-    typer.echo(f"\r{received} trame(s) reçue(s) · {where}   ", err=True, nl=False)
+    where = f"counter {counter}/{BULK_LAST_COUNTER}" if counter is not None else "not an ES-8 frame"
+    typer.echo(f"\r{received} frame(s) received · {where}   ", err=True, nl=False)
 
 
 @app.command()
 def devices() -> None:
-    """Liste les ports MIDI d'entrée et de sortie disponibles."""
+    """List the available MIDI input and output ports."""
     from .transfer import list_output_ports
 
     _print_json({"input_ports": list_ports(), "output_ports": list_output_ports()})
@@ -59,43 +59,43 @@ def devices() -> None:
 
 @app.command()
 def capture(
-    port: str = typer.Option(None, "--port", "-p", help="Port d'entrée MIDI (interactif si omis)."),
+    port: str = typer.Option(None, "--port", "-p", help="MIDI input port (asks if omitted)."),
     out_dir: Path = typer.Option(
-        Path("captures"), "--out", "-o", help="Répertoire de sortie du dump."
+        Path("captures"), "--out", "-o", help="Output directory for the dump."
     ),
     timeout: float = typer.Option(
-        None, "--timeout", "-t", help="Durée de capture en secondes (sinon Ctrl-C)."
+        None, "--timeout", "-t", help="Capture duration in seconds (otherwise Ctrl-C)."
     ),
     auto_stop: bool = typer.Option(
         True,
         "--auto-stop/--no-auto-stop",
-        help=f"S'arrêter à la dernière trame du bulk dump (compteur {BULK_LAST_COUNTER}).",
+        help=f"Stop at the last bulk dump frame (counter {BULK_LAST_COUNTER}).",
     ),
 ) -> None:
-    """Enregistre les trames SysEx reçues. Lancer AVANT de déclencher le bulk dump au panneau.
+    """Record incoming SysEx frames. Start it BEFORE triggering the bulk dump on the ES-8 panel.
 
-    La progression s'affiche sur stderr ; le résultat JSON sur stdout.
+    Progress goes to stderr, the JSON result to stdout.
     """
     ports = list_ports()
     if port is None:
         if not ports:
-            typer.echo(json.dumps({"error": "Aucun port d'entrée MIDI détecté."}))
+            typer.echo(json.dumps({"error": "No MIDI input port found."}))
             raise typer.Exit(code=1)
         for i, name in enumerate(ports):
             typer.echo(f"{i}: {name}", err=True)
-        choice = typer.prompt("Port à écouter (numéro)", type=int)
+        choice = typer.prompt("Port to listen to (number)", type=int)
         port = ports[choice]
     else:
         from .transfer import resolve_port
 
         resolved = resolve_port(port, ports)
         if resolved is None:
-            typer.echo(json.dumps({"error": f"Port inconnu : {port}", "available": ports}))
+            typer.echo(json.dumps({"error": f"Unknown port: {port}", "available": ports}))
             raise typer.Exit(code=1)
         port = resolved
 
     try:
-        typer.echo(f"Écoute de {port} : déclencher le bulk dump sur l'ES-8.", err=True)
+        typer.echo(f"Listening to {port}: trigger the bulk dump on the ES-8.", err=True)
         result = record(
             port, Path(out_dir), timeout_s=timeout, auto_stop=auto_stop, on_frame=_progress
         )
@@ -107,8 +107,8 @@ def capture(
     _print_json(_dump_result(result))
     if result.decode_errors:
         typer.echo(
-            f"ATTENTION : {len(result.decode_errors)} trame(s) invalide(s) "
-            "(octets perdus en transit ?) — refaire le dump avant de s'en servir.",
+            f"WARNING: {len(result.decode_errors)} invalid frame(s) "
+            "(bytes lost in transit?). Dump again before using it.",
             err=True,
         )
         raise typer.Exit(code=2)
@@ -118,10 +118,10 @@ def capture(
 def inspect(
     syx: Path = typer.Argument(..., exists=True, readable=True),
     address_size: int = typer.Option(
-        4, "--address-size", help="Taille d'adresse supposée (3 ou 4 octets)."
+        4, "--address-size", help="Assumed address size (3 or 4 bytes)."
     ),
 ) -> None:
-    """Re-décode hors ligne un fichier .syx."""
+    """Decode a .syx file offline."""
     try:
         result = inspect_file(syx, address_size=address_size)
     except (CodecError, ValueError) as exc:
@@ -134,12 +134,12 @@ def inspect(
 
 @app.command()
 def diff(
-    a: Path = typer.Argument(..., exists=True, readable=True, help="Dump de référence (.syx)."),
-    b: Path = typer.Argument(..., exists=True, readable=True, help="Dump à comparer (.syx)."),
+    a: Path = typer.Argument(..., exists=True, readable=True, help="Reference dump (.syx)."),
+    b: Path = typer.Argument(..., exists=True, readable=True, help="Dump to compare (.syx)."),
 ) -> None:
-    """Compare deux bulk dumps : écarts par patch, octet et bit.
+    """Compare two bulk dumps: differences per patch, byte and bit.
 
-    Code de sortie : 0 identiques, 1 différents, 2 erreur.
+    Exit code: 0 identical, 1 different, 2 error.
     """
     try:
         result = diff_files(a, b)
@@ -155,16 +155,16 @@ def diff(
 def patches(
     syx: Path = typer.Argument(..., exists=True, readable=True, help="Bulk dump (.syx)."),
     patch: list[str] = typer.Option(
-        None, "--patch", "-p", help="Patch à sortir (ex. 0-1), répétable. Tous par défaut."
+        None, "--patch", "-p", help="Patch to output (e.g. 0-1), repeatable. All by default."
     ),
 ) -> None:
-    """Décode les patchs d'un bulk dump en JSON (forme des clés et valeurs alignée sur le .bel)."""
+    """Decode the patches of a bulk dump to JSON (keys and values as in .bel files)."""
     try:
         dump = load_dump(syx)
         wanted = sorted({parse_patch_label(p) for p in patch}) if patch else sorted(dump.patches)
         missing = [patch_label(i) for i in wanted if i not in dump.patches]
         if missing:
-            raise CodecError(f"Patch(s) absent(s) ou incomplet(s) dans le dump : {', '.join(missing)}.")
+            raise CodecError(f"Patch(es) missing or incomplete in the dump: {', '.join(missing)}.")
         decoded = []
         for i in wanted:
             fields = decode_patch(unpack_page(dump.patches[i]))
@@ -197,12 +197,12 @@ def patches(
 def system(
     syx: Path = typer.Argument(..., exists=True, readable=True, help="Bulk dump (.syx)."),
 ) -> None:
-    """Décode le bloc système d'un bulk dump en JSON (clés alignées sur le .bel)."""
+    """Decode the system block of a bulk dump to JSON (keys as in .bel files)."""
     try:
         dump = load_dump(syx)
         if dump.system is None:
             raise CodecError(
-                "Bloc système absent (trames 0-15) : lancer la capture avant le dump."
+                "No system block (frames 0-15): start the capture before the dump."
             )
         fields = decode_system(dump.system)
     except (CodecError, ValueError) as exc:
@@ -237,7 +237,7 @@ def _backup(base: Path, backup_dir: Path) -> Path:
 
 
 transform_app = typer.Typer(
-    help="Transformations en masse : produisent un JSON de changements pour `es8ctl apply`."
+    help="Bulk changes: they output a changes JSON for `es8ctl apply`."
 )
 app.add_typer(transform_app, name="transform")
 
@@ -262,12 +262,12 @@ def _load_base(base: Path):
 
 @transform_app.command("set")
 def transform_set(
-    assignments: list[str] = typer.Argument(..., help="champ=valeur ou champ[index]=valeur (ex. ctl_func[NUM_8]=BPM)."),
-    base: Path = typer.Option(..., "--base", "-b", exists=True, readable=True, help="Dump de l'ES-8."),
-    patches: str = typer.Option("all", "--patches", help="Sélection : all, 0-1..9-8, 0-1,2-3."),
-    out: Path = typer.Option(None, "--out", "-o", help="Fichier de sortie (sinon stdout)."),
+    assignments: list[str] = typer.Argument(..., help="field=value or field[index]=value (e.g. ctl_func[NUM_8]=BPM)."),
+    base: Path = typer.Option(..., "--base", "-b", exists=True, readable=True, help="ES-8 dump."),
+    patches: str = typer.Option("all", "--patches", help="Selection: all, 0-1..9-8, 0-1,2-3."),
+    out: Path = typer.Option(None, "--out", "-o", help="Output file (otherwise stdout)."),
 ) -> None:
-    """Affecte des valeurs à une sélection de patchs."""
+    """Set values on a selection of patches."""
     dump = _load_base(base)
     try:
         changes = tf.op_set(dump, tf.select_patches(dump, patches), assignments)
@@ -280,11 +280,11 @@ def transform_set(
 def transform_swap_loops(
     loop_a: str = typer.Argument(..., help="Loop (1-8, L1…L8, LV)."),
     loop_b: str = typer.Argument(..., help="Loop (1-8, L1…L8, LV)."),
-    base: Path = typer.Option(..., "--base", "-b", exists=True, readable=True, help="Dump de l'ES-8."),
-    patches: str = typer.Option("all", "--patches", help="Sélection : all, 0-1..9-8, 0-1,2-3."),
-    out: Path = typer.Option(None, "--out", "-o", help="Fichier de sortie (sinon stdout)."),
+    base: Path = typer.Option(..., "--base", "-b", exists=True, readable=True, help="ES-8 dump."),
+    patches: str = typer.Option("all", "--patches", help="Selection: all, 0-1..9-8, 0-1,2-3."),
+    out: Path = typer.Option(None, "--out", "-o", help="Output file (otherwise stdout)."),
 ) -> None:
-    """Échange deux loops partout (interrupteurs, carry-over, cibles d'assign, chaîne)."""
+    """Swap two loops everywhere (switches, carry-over, assign targets, chain)."""
     dump = _load_base(base)
     try:
         changes = tf.op_swap_loops(dump, tf.select_patches(dump, patches), loop_a, loop_b)
@@ -297,16 +297,16 @@ def transform_swap_loops(
 
 @transform_app.command("variants")
 def transform_variants(
-    source: str = typer.Argument(..., help="Patch source (ex. 0-8)."),
-    into: str = typer.Option(..., "--into", help="Premier patch cible (ex. 10-1) ; les suivants sont consécutifs."),
-    count: int = typer.Option(..., "--count", "-n", help="Nombre de variantes."),
-    base: Path = typer.Option(..., "--base", "-b", exists=True, readable=True, help="Dump de l'ES-8."),
-    seed: int = typer.Option(0, "--seed", help="Graine du tirage (résultat reproductible)."),
-    prefix: str = typer.Option(None, "--prefix", help="Début du nom des variantes (défaut : nom de la source)."),
-    overwrite: bool = typer.Option(False, "--overwrite", help="Autoriser l'écrasement de patchs non vierges."),
-    out: Path = typer.Option(None, "--out", "-o", help="Fichier de sortie (sinon stdout)."),
+    source: str = typer.Argument(..., help="Source patch (e.g. 0-8)."),
+    into: str = typer.Option(..., "--into", help="First target patch (e.g. 10-1); the next ones follow."),
+    count: int = typer.Option(..., "--count", "-n", help="Number of variants."),
+    base: Path = typer.Option(..., "--base", "-b", exists=True, readable=True, help="ES-8 dump."),
+    seed: int = typer.Option(0, "--seed", help="Random seed (reproducible result)."),
+    prefix: str = typer.Option(None, "--prefix", help="Start of the variants' names (default: the source name)."),
+    overwrite: bool = typer.Option(False, "--overwrite", help="Allow overwriting patches that are not blank."),
+    out: Path = typer.Option(None, "--out", "-o", help="Output file (otherwise stdout)."),
 ) -> None:
-    """Copie un patch en N variantes aux ordres de loops tous différents."""
+    """Copy a patch into N variants, each with a different loop order."""
     dump = _load_base(base)
     try:
         changes = tf.op_variants(dump, source, into, count, seed=seed, prefix=prefix, overwrite=overwrite)
@@ -318,35 +318,35 @@ def transform_variants(
 
 @app.command()
 def apply(
-    changes: Path = typer.Argument(..., help="Changements JSON (« - » pour stdin)."),
+    changes: Path = typer.Argument(..., help="Changes JSON (\"-\" for stdin)."),
     base: Path = typer.Option(
         ..., "--base", "-b", exists=True, readable=True,
-        help="Dump frais de l'ES-8 (état actuel), base des modifications.",
+        help="Fresh dump of the ES-8 (current state), the base for the changes.",
     ),
-    write: bool = typer.Option(False, "--write", help="Envoyer réellement à l'ES-8 (sinon simulation)."),
-    port: str = typer.Option(None, "--port", "-p", help="Port de sortie MIDI (requis avec --write)."),
+    write: bool = typer.Option(False, "--write", help="Actually send to the ES-8 (otherwise a dry run)."),
+    port: str = typer.Option(None, "--port", "-p", help="MIDI output port (required with --write)."),
     expected_out: Path = typer.Option(
-        None, "--expected-out", help="Dump attendu après écriture (défaut : captures/expected_<horodatage>.syx)."
+        None, "--expected-out", help="Expected dump after writing (default: captures/expected_<timestamp>.syx)."
     ),
-    backup_dir: Path = typer.Option(Path("backups"), "--backup-dir", help="Répertoire des sauvegardes."),
+    backup_dir: Path = typer.Option(Path("backups"), "--backup-dir", help="Backup directory."),
     interval: float = typer.Option(
         DEFAULT_INTERVAL_S, "--interval",
-        help="Délai entre les deux messages d'une page, en secondes (≥ 0,05, spec Roland).",
+        help="Delay between the two messages of a page, in seconds (≥ 0.05, Roland spec).",
     ),
     page_gap: float = typer.Option(
-        DEFAULT_PAGE_GAP_S, "--page-gap", help="Pause entre deux pages, en secondes (≥ 0,05)."
+        DEFAULT_PAGE_GAP_S, "--page-gap", help="Pause between two pages, in seconds (≥ 0.05)."
     ),
     confirm: bool = typer.Option(
         False, "--confirm",
-        help="Après l'envoi, relire les pages écrites (RQ1) et renvoyer celles qui ne sont pas conformes.",
+        help="After sending, read the written pages back (RQ1) and resend those that differ.",
     ),
-    port_in: str = typer.Option(None, "--port-in", help="Port d'écoute pour --confirm, s'il diffère de --port."),
-    rounds: int = typer.Option(3, "--rounds", help="Tours de relecture / renvoi au plus, avec --confirm."),
+    port_in: str = typer.Option(None, "--port-in", help="Input port for --confirm, if different from --port."),
+    rounds: int = typer.Option(3, "--rounds", help="Maximum read-back / resend rounds, with --confirm."),
 ) -> None:
-    """Applique des changements à l'ES-8. Simulation par défaut ; --write pour envoyer.
+    """Apply changes to the ES-8. Dry run by default; --write to send.
 
-    Codes de sortie : 0 succès, 1 pages non confirmées malgré les renvois
-    (--confirm), 2 changements ou base invalides, 3 écriture interrompue.
+    Exit codes: 0 success, 1 pages not confirmed despite resending
+    (--confirm), 2 invalid changes or base, 3 write interrupted.
     """
     try:
         raw = sys.stdin.read() if str(changes) == "-" else changes.read_text(encoding="utf-8")
@@ -367,10 +367,10 @@ def apply(
         "expected": str(expected),
     }
     if not plan.frames:
-        _print_json({**report, "note": "Aucun changement effectif : rien à envoyer."})
+        _print_json({**report, "note": "Nothing actually changes: nothing to send."})
         return
     if not write:
-        _print_json({**report, "note": "Simulation : rien n'a été envoyé. Ajouter --write --port <port>.",
+        _print_json({**report, "note": "Dry run: nothing was sent. Add --write --port <port>.",
                      "precondition": DEVICE_PRECONDITION})
         return
 
@@ -381,24 +381,24 @@ def apply(
     outputs = list_output_ports()
     port = resolve_port(port, outputs) if port is not None else None
     if port is None or port not in outputs:
-        _fail(2, error="Port de sortie requis avec --write (voir es8ctl devices).",
+        _fail(2, error="An output port is required with --write (see es8ctl devices).",
               port=port, available=outputs)
     report["port"] = port
     report["backup"] = str(_backup(base, backup_dir))
     report["precondition"] = DEVICE_PRECONDITION
-    typer.echo(f"Rappel : {DEVICE_PRECONDITION}", err=True)
+    typer.echo(f"Reminder: {DEVICE_PRECONDITION}", err=True)
     sent = 0
 
     def progress(n: int, total: int) -> None:
         nonlocal sent
         sent = n
-        typer.echo(f"\r{n}/{total} message(s) envoyé(s)   ", err=True, nl=False)
+        typer.echo(f"\r{n}/{total} message(s) sent   ", err=True, nl=False)
 
     try:
         send_frames(port, plan.frames, interval_s=interval, on_frame=progress, page_gap_s=page_gap)
     except (KeyboardInterrupt, Exception) as exc:  # écriture partielle : toujours signalée
         typer.echo("", err=True)
-        _fail(3, **report, error=f"Écriture interrompue : {exc!r}", sent=sent)
+        _fail(3, **report, error=f"Write interrupted: {exc!r}", sent=sent)
     typer.echo("", err=True)
     report["sent"] = sent
     if not confirm:
@@ -406,7 +406,7 @@ def apply(
             **report,
             "next_steps": [
                 f"es8ctl read --port \"{port}\"",
-                f"es8ctl verify {expected} captures/<nouvelle lecture>.syx",
+                f"es8ctl verify {expected} captures/<new read>.syx",
             ],
         })
         return
@@ -419,7 +419,7 @@ def apply(
 
     listen = resolve_port(port_in or port, list_ports())
     if listen is None:
-        _fail(2, **report, error=f"Port d'écoute introuvable : {port_in or port}")
+        _fail(2, **report, error=f"Input port not found: {port_in or port}")
     def phase_progress(phase: str, n: int, total: int) -> None:
         typer.echo(f"\r{phase} {n}/{total}   ", err=True, nl=False)
 
@@ -432,7 +432,7 @@ def apply(
         ))
     typer.echo("", err=True)
     todo = result["pending_counters"]
-    labels = sorted({patch_label(c // 2 - 8) if c >= 16 else "système" for c in todo})
+    labels = sorted({patch_label(c // 2 - 8) if c >= 16 else "system" for c in todo})
     _print_json({**report, "confirmed": result["confirmed"], "confirm": result["history"],
                  "not_confirmed": labels})
     if todo:
@@ -441,10 +441,10 @@ def apply(
 
 @app.command()
 def verify(
-    expected: Path = typer.Argument(..., exists=True, readable=True, help="Dump attendu (apply)."),
-    actual: Path = typer.Argument(..., exists=True, readable=True, help="Dump capturé après écriture."),
+    expected: Path = typer.Argument(..., exists=True, readable=True, help="Expected dump (from apply)."),
+    actual: Path = typer.Argument(..., exists=True, readable=True, help="Dump read after writing."),
 ) -> None:
-    """Vérifie qu'un dump capturé correspond au dump attendu. Code 0 si conforme, 1 sinon."""
+    """Check that a dump read after writing matches the expected one. Exit 0 if it does, 1 if not."""
     try:
         result = diff_files(expected, actual)
     except (CodecError, ValueError) as exc:
@@ -460,7 +460,7 @@ def verify(
         result["system"]["changed_fields"] = fields
         if fields == ["current_num"]:
             system_ok = True
-            notes.append(f"current_num ignoré ({before['current_num']} → {after['current_num']}) : patch sélectionné.")
+            notes.append(f"current_num ignored ({before['current_num']} → {after['current_num']}): selected patch.")
     match = not result["patches"] and system_ok and not missing
     _print_json({"match": match, "notes": notes, **result})
     if not match:
@@ -469,12 +469,12 @@ def verify(
 
 @app.command()
 def check(
-    changes: Path = typer.Argument(..., exists=True, readable=True, help="Changements JSON."),
-    actual: Path = typer.Argument(..., exists=True, readable=True, help="Dump capturé après écriture."),
+    changes: Path = typer.Argument(..., exists=True, readable=True, help="Changes JSON."),
+    actual: Path = typer.Argument(..., exists=True, readable=True, help="Dump read after writing."),
 ) -> None:
-    """Vérifie, patch par patch, que des changements sont présents dans un dump.
+    """Check, patch by patch, that changes are present in a dump.
 
-    Code 0 si tous sont appliqués, 1 sinon, 2 erreur.
+    Exit 0 if all are applied, 1 if not, 2 on error.
     """
     try:
         result = check_changes(
@@ -489,10 +489,10 @@ def check(
 
 @app.command("export-bel")
 def export_bel_cmd(
-    syx: Path = typer.Argument(..., exists=True, readable=True, help="Bulk dump complet (.syx)."),
-    out: Path = typer.Option(..., "--out", "-o", help="Fichier .bel à écrire."),
+    syx: Path = typer.Argument(..., exists=True, readable=True, help="Complete bulk dump (.syx)."),
+    out: Path = typer.Option(..., "--out", "-o", help=".bel file to write."),
 ) -> None:
-    """Exporte un dump au format .bel de l'éditeur officiel BOSS."""
+    """Export a dump as a .bel file (official BOSS editor librarian format)."""
     from .bel import export_bel
     from .codec import frames_by_counter
 
@@ -507,11 +507,11 @@ def export_bel_cmd(
 
 @app.command("import-bel")
 def import_bel_cmd(
-    bel: Path = typer.Argument(..., exists=True, readable=True, help="Fichier .bel de l'éditeur."),
-    base: Path = typer.Option(..., "--base", "-b", exists=True, readable=True, help="Dump actuel de l'ES-8."),
-    out: Path = typer.Option(None, "--out", "-o", help="Changements JSON (sinon stdout)."),
+    bel: Path = typer.Argument(..., exists=True, readable=True, help=".bel file from the editor."),
+    base: Path = typer.Option(..., "--base", "-b", exists=True, readable=True, help="Current ES-8 dump."),
+    out: Path = typer.Option(None, "--out", "-o", help="Changes JSON (otherwise stdout)."),
 ) -> None:
-    """Convertit un .bel en changements JSON pour `es8ctl apply` (différences avec la base)."""
+    """Turn a .bel file into changes JSON for `es8ctl apply` (differences with the base)."""
     from .bel import import_bel
 
     try:
@@ -525,17 +525,17 @@ def import_bel_cmd(
 
 @app.command()
 def sniff(
-    editor: str = typer.Option(..., "--editor", help="Port côté éditeur (ex. session réseau rtpMIDI)."),
-    device: str = typer.Option(..., "--device", help="Port côté ES-8 (ex. WIDI Jack Bluetooth)."),
+    editor: str = typer.Option(..., "--editor", help="Port on the editor side (e.g. an rtpMIDI network session)."),
+    device: str = typer.Option(..., "--device", help="Port on the ES-8 side (e.g. WIDI Jack Bluetooth)."),
     device_in: str = typer.Option(
-        None, "--device-in", help="Port d'écoute de l'ES-8, s'il diffère de --device (ex. interface filaire)."
+        None, "--device-in", help="Port to listen to the ES-8, if different from --device (e.g. a wired interface)."
     ),
-    out_dir: Path = typer.Option(Path("captures"), "--out", "-o", help="Répertoire du journal."),
-    timeout: float = typer.Option(None, "--timeout", "-t", help="Durée en secondes (sinon Ctrl-C)."),
+    out_dir: Path = typer.Option(Path("captures"), "--out", "-o", help="Log directory."),
+    timeout: float = typer.Option(None, "--timeout", "-t", help="Duration in seconds (otherwise Ctrl-C)."),
 ) -> None:
-    """Relaie l'éditeur officiel ↔ ES-8 en journalisant chaque message (JSON Lines).
+    """Relay the official editor ↔ ES-8, logging every message (JSON Lines).
 
-    Seuls les messages de l'éditeur sont transmis à l'ES-8. Ctrl-C pour arrêter.
+    Only the editor's messages are forwarded to the ES-8. Ctrl-C to stop.
     """
     from .sniff import relay
     from .transfer import list_output_ports
@@ -545,21 +545,21 @@ def sniff(
     inputs, outputs = list_ports(), list_output_ports()
     editor_port = resolve_port(editor, inputs)
     if editor_port is None or editor_port not in outputs:
-        _fail(2, error=f"Port éditeur introuvable en entrée/sortie : {editor}", inputs=inputs, outputs=outputs)
+        _fail(2, error=f"Editor port not found as input and output: {editor}", inputs=inputs, outputs=outputs)
     device_out = resolve_port(device, outputs)
     device_listen = resolve_port(device_in or device, inputs)
     if device_out is None or device_listen is None:
-        _fail(2, error="Port ES-8 introuvable.", inputs=inputs, outputs=outputs)
+        _fail(2, error="ES-8 port not found.", inputs=inputs, outputs=outputs)
     editor, device = editor_port, device_out
     if editor == device:
-        _fail(2, error="Les ports éditeur et ES-8 doivent être différents.")
+        _fail(2, error="The editor and ES-8 ports must be different.")
 
     def show(direction: str, entry: dict) -> None:
         arrow = "→ ES-8 " if direction.startswith("editor") else "← ES-8 "
         typer.echo(f"{entry['t']:9.3f} {arrow}{entry['type']:<14} {entry['hex'][:60]}", err=True)
 
-    typer.echo(f"Relais {editor} ⇄ ES-8 (envoi {device}, écoute {device_listen}) : connecter "
-               "l'éditeur. Ctrl-C pour arrêter.", err=True)
+    typer.echo(f"Relaying {editor} ⇄ ES-8 (sending to {device}, listening to {device_listen}): connect "
+               "the editor. Ctrl-C to stop.", err=True)
     try:
         result = relay(editor, device, out_dir, timeout_s=timeout, on_message=show,
                        device_in_port=device_listen)
@@ -570,12 +570,12 @@ def sniff(
 
 @app.command()
 def names(
-    port: str = typer.Option(..., "--port", "-p", help="Port de sortie vers l'ES-8 (ex. WIDI)."),
-    port_in: str = typer.Option(None, "--port-in", help="Port d'écoute de l'ES-8, s'il diffère de --port."),
+    port: str = typer.Option(..., "--port", "-p", help="Output port to the ES-8 (e.g. WIDI)."),
+    port_in: str = typer.Option(None, "--port-in", help="Port to listen to the ES-8, if different from --port."),
 ) -> None:
-    """Lit les 800 noms de patchs (≈ 7 s), sans lire les patchs eux-mêmes.
+    """Read the 800 patch names (≈ 7 s) without reading the patches themselves.
 
-    Sortie : {"0-1": "NOM", …}. Code 0 si les 800 noms sont lus, 1 sinon, 2 erreur.
+    Output: {"0-1": "NAME", …}. Exit 0 if all 800 names were read, 1 if not, 2 on error.
     """
     from .codec import PATCH_COUNT
     from .request import read_names
@@ -585,7 +585,7 @@ def names(
     out_port = resolve_port(port, outputs)
     in_port = resolve_port(port_in or port, inputs)
     if out_port is None or in_port is None:
-        _fail(2, error="Port introuvable.", inputs=inputs, outputs=outputs)
+        _fail(2, error="Port not found.", inputs=inputs, outputs=outputs)
     try:
         found = read_names(out_port, in_port)
     except Exception as exc:  # surface explicite
@@ -597,16 +597,16 @@ def names(
 
 @app.command()
 def read(
-    port: str = typer.Option(..., "--port", "-p", help="Port de sortie vers l'ES-8 (ex. WIDI)."),
-    port_in: str = typer.Option(None, "--port-in", help="Port d'écoute de l'ES-8, s'il diffère de --port."),
-    patches: str = typer.Option("all", "--patches", help="Patchs à lire : all, none, 0-1..9-8, 0-1,2-3."),
-    system: bool = typer.Option(True, "--system/--no-system", help="Lire aussi le bloc système."),
-    out_dir: Path = typer.Option(Path("captures"), "--out", "-o", help="Répertoire de sortie."),
-    chunk: int = typer.Option(8, "--chunk", help="Pages par requête (les pages manquantes sont redemandées seules)."),
+    port: str = typer.Option(..., "--port", "-p", help="Output port to the ES-8 (e.g. WIDI)."),
+    port_in: str = typer.Option(None, "--port-in", help="Port to listen to the ES-8, if different from --port."),
+    patches: str = typer.Option("all", "--patches", help="Patches to read: all, none, 0-1..9-8, 0-1,2-3."),
+    system: bool = typer.Option(True, "--system/--no-system", help="Also read the system block."),
+    out_dir: Path = typer.Option(Path("captures"), "--out", "-o", help="Output directory."),
+    chunk: int = typer.Option(8, "--chunk", help="Pages per request (missing pages are requested again one by one)."),
 ) -> None:
-    """Lit l'ES-8 à distance (RQ1), sans dump au panneau. Écrit un .syx partiel ou complet.
+    """Read the ES-8 remotely (RQ1), with no panel action. Writes a partial or complete .syx.
 
-    Code 0 si tout est lu, 1 si des pages manquent malgré les relances, 2 erreur.
+    Exit 0 if everything was read, 1 if pages are still missing after retries, 2 on error.
     """
     from .codec import PATCH_COUNT
     from .request import frames_to_syx, patch_page, read_pages
@@ -616,7 +616,7 @@ def read(
     out_port = resolve_port(port, outputs)
     in_port = resolve_port(port_in or port, inputs)
     if out_port is None or in_port is None:
-        _fail(2, error="Port introuvable.", inputs=inputs, outputs=outputs)
+        _fail(2, error="Port not found.", inputs=inputs, outputs=outputs)
     if patches.strip().lower() == "none":
         indices = []
     elif patches.strip().lower() == "all":
@@ -632,12 +632,12 @@ def read(
             _fail(2, error=str(exc))
     pages = (list(range(8)) if system else []) + [patch_page(i) for i in indices]
     if not pages:
-        _fail(2, error="Rien à lire.")
+        _fail(2, error="Nothing to read.")
 
     def progress(n: int, total: int) -> None:
-        typer.echo(f"\r{n}/{total} message(s) reçu(s)   ", err=True, nl=False)
+        typer.echo(f"\r{n}/{total} message(s) received   ", err=True, nl=False)
 
-    typer.echo(f"Lecture de {len(pages)} page(s) : envoi {out_port}, écoute {in_port}.", err=True)
+    typer.echo(f"Reading {len(pages)} page(s): sending to {out_port}, listening to {in_port}.", err=True)
     try:
         frames, missing = read_pages(out_port, in_port, pages, chunk_pages=chunk, on_progress=progress)
     except Exception as exc:  # surface explicite
@@ -646,7 +646,7 @@ def read(
     out_dir.mkdir(parents=True, exist_ok=True)
     target = out_dir / f"read_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}.syx"
     target.write_bytes(frames_to_syx(frames))
-    labels = [("système " + str(p + 1)) if p < 8 else patch_label(p - 8) for p in missing]
+    labels = [("system " + str(p + 1)) if p < 8 else patch_label(p - 8) for p in missing]
     _print_json({"syx": str(target), "frames": len(frames), "pages_requested": len(pages),
                  "missing_pages": labels})
     if missing:
@@ -654,7 +654,7 @@ def read(
 
 
 patch_app = typer.Typer(
-    help="Commandes directes de l'ES-8 (protocole de l'éditeur officiel) : vérifiées par relecture."
+    help="Direct ES-8 commands (official editor protocol), each checked by reading back."
 )
 app.add_typer(patch_app, name="patch")
 
@@ -675,19 +675,19 @@ def _run_live(op, port: str, port_in: str | None, write: bool, backup_dir: Path)
 
     report = op.describe()
     if not write and op.action != "select":
-        _print_json({**report, "mode": "dry-run", "note": "Ajouter --write --port <port> pour exécuter.",
+        _print_json({**report, "mode": "dry-run", "note": "Add --write --port <port> to run it.",
                      "precondition": DEVICE_PRECONDITION})
         return
     out_port = resolve_port(port, list_output_ports()) if port else None
     in_port = resolve_port(port_in or port, list_ports()) if port else None
     if out_port is None or in_port is None:
-        _fail(2, **report, error="Port introuvable (--port, --port-in).")
+        _fail(2, **report, error="Port not found (--port, --port-in).")
 
     def read_touched(indices, system=False):
         pages = (list(range(8)) if system else []) + [patch_page(i) for i in indices]
         frames, missing = read_pages(out_port, in_port, pages)
         if missing:
-            _fail(1, **report, error="Relecture incomplète.", missing_pages=missing)
+            _fail(1, **report, error="Read-back incomplete.", missing_pages=missing)
         return frames, split_dump(list(frames.values()))
 
     before = {}
@@ -728,10 +728,10 @@ def _run_live(op, port: str, port_in: str | None, write: bool, backup_dir: Path)
         raise typer.Exit(code=1)
 
 
-_PORT = typer.Option(None, "--port", "-p", help="Port vers l'ES-8 (ex. WIDI Jack Bluetooth).")
-_PORT_IN = typer.Option(None, "--port-in", help="Port d'écoute, s'il diffère de --port.")
-_WRITE = typer.Option(False, "--write", help="Exécuter (sinon simulation).")
-_BACKUPS = typer.Option(Path("backups"), "--backup-dir", help="Répertoire des sauvegardes.")
+_PORT = typer.Option(None, "--port", "-p", help="Port to the ES-8 (e.g. WIDI Jack Bluetooth).")
+_PORT_IN = typer.Option(None, "--port-in", help="Input port, if different from --port.")
+_WRITE = typer.Option(False, "--write", help="Run it (otherwise a dry run).")
+_BACKUPS = typer.Option(Path("backups"), "--backup-dir", help="Backup directory.")
 
 
 def _live(build, *args, port, port_in, write, backup_dir) -> None:
@@ -745,17 +745,17 @@ def _live(build, *args, port, port_in, write, backup_dir) -> None:
 
 
 @patch_app.command("select")
-def patch_select(patch: str = typer.Argument(..., help="Patch à afficher (ex. 6-2)."),
+def patch_select(patch: str = typer.Argument(..., help="Patch to recall (e.g. 6-2)."),
                  port: str = _PORT, port_in: str = _PORT_IN) -> None:
-    """Fait passer l'ES-8 sur un patch (aucune donnée modifiée)."""
+    """Recall a patch on the ES-8 (no data changes)."""
     _live("select", patch, port=port, port_in=port_in, write=True, backup_dir=Path("backups"))
 
 
 @patch_app.command("rename")
-def patch_rename(patch: str = typer.Argument(...), name: str = typer.Argument(..., help="16 caractères au plus."),
+def patch_rename(patch: str = typer.Argument(...), name: str = typer.Argument(..., help="16 characters at most."),
                  port: str = _PORT, port_in: str = _PORT_IN, write: bool = _WRITE,
                  backup_dir: Path = _BACKUPS) -> None:
-    """Renomme un patch."""
+    """Rename a patch."""
     _live("rename", patch, name, port=port, port_in=port_in, write=write, backup_dir=backup_dir)
 
 
@@ -763,7 +763,7 @@ def patch_rename(patch: str = typer.Argument(...), name: str = typer.Argument(..
 def patch_copy(source: str = typer.Argument(...), target: str = typer.Argument(...),
                port: str = _PORT, port_in: str = _PORT_IN, write: bool = _WRITE,
                backup_dir: Path = _BACKUPS) -> None:
-    """Copie un patch sur un autre (la cible est écrasée)."""
+    """Copy a patch onto another (the target is overwritten)."""
     _live("copy", source, target, port=port, port_in=port_in, write=write, backup_dir=backup_dir)
 
 
@@ -771,14 +771,14 @@ def patch_copy(source: str = typer.Argument(...), target: str = typer.Argument(.
 def patch_exchange(first: str = typer.Argument(...), second: str = typer.Argument(...),
                    port: str = _PORT, port_in: str = _PORT_IN, write: bool = _WRITE,
                    backup_dir: Path = _BACKUPS) -> None:
-    """Échange deux patchs."""
+    """Swap two patches."""
     _live("exchange", first, second, port=port, port_in=port_in, write=write, backup_dir=backup_dir)
 
 
 @patch_app.command("init")
 def patch_init(patch: str = typer.Argument(...), port: str = _PORT, port_in: str = _PORT_IN,
                write: bool = _WRITE, backup_dir: Path = _BACKUPS) -> None:
-    """Réinitialise un patch (réglages d'usine, nom vide)."""
+    """Reset a patch (factory settings, blank name)."""
     _live("initialize", patch, port=port, port_in=port_in, write=write, backup_dir=backup_dir)
 
 
@@ -798,10 +798,10 @@ def library_zip() -> bytes:
 
 @app.command()
 def web(
-    port: int = typer.Option(8765, "--port", help="Port HTTP local."),
-    open_browser: bool = typer.Option(True, "--open/--no-open", help="Ouvrir le navigateur."),
+    port: int = typer.Option(8765, "--port", help="Local HTTP port."),
+    open_browser: bool = typer.Option(True, "--open/--no-open", help="Open the browser."),
 ) -> None:
-    """Lance l'interface web en local (Chrome / Edge : Web MIDI). Ctrl-C pour arrêter."""
+    """Run the web editor locally (Chrome / Edge: Web MIDI). Ctrl-C to stop."""
     import functools
     import http.server
     import webbrowser
@@ -831,7 +831,7 @@ def web(
     handler = functools.partial(Handler, directory=str(web_dir))
     server = http.server.ThreadingHTTPServer(("127.0.0.1", port), handler)
     url = f"http://localhost:{port}/"
-    typer.echo(f"Interface web : {url}  (Chrome ou Edge ; Ctrl-C pour arrêter)", err=True)
+    typer.echo(f"Web editor: {url}  (Chrome or Edge; Ctrl-C to stop)", err=True)
     if open_browser:
         webbrowser.open(url)
     try:
@@ -842,22 +842,14 @@ def web(
         server.server_close()
 
 
-def main() -> None:
-    app()
-
-
-if __name__ == "__main__":
-    main()
-
-
 @app.command("build-web")
 def build_web(
-    out: Path = typer.Option(Path("dist/site"), "--out", "-o", help="Répertoire du site à produire."),
+    out: Path = typer.Option(Path("dist/site"), "--out", "-o", help="Directory of the site to build."),
 ) -> None:
-    """Produit l'interface web en site statique (GitHub Pages ou tout hébergement HTTPS).
+    """Build the web editor as a static site (GitHub Pages or any HTTPS host).
 
-    Tout s'exécute dans le navigateur : le site n'a besoin d'aucun serveur
-    applicatif. Web MIDI exige HTTPS (ou localhost).
+    Everything runs in the browser: the site needs no application server.
+    Web MIDI requires HTTPS (or localhost).
     """
     import shutil
 
@@ -868,3 +860,12 @@ def build_web(
     (out / "es8ctl.zip").write_bytes(library_zip())
     (out / ".nojekyll").write_text("")  # GitHub Pages : servir les fichiers tels quels
     _print_json({"site": str(out), "files": sorted(str(p.relative_to(out)) for p in out.rglob("*") if p.is_file())})
+
+
+def main() -> None:
+    app()
+
+
+if __name__ == "__main__":
+    main()
+

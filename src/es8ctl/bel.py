@@ -71,8 +71,8 @@ def export_bel(dump: BulkDump, last_frames: dict[int, bytes] | None = None) -> t
             record = first + factory[BULK_DATA_LEN:]
             same = first == factory[:BULK_DATA_LEN]
             warnings.append(
-                f"{patch_label(index)} : seconde moitié jamais reçue, reprise du patch d'usine"
-                + (" (première moitié identique à l'usine)." if same else " — à vérifier.")
+                f"{patch_label(index)}: second half never received, taken from the factory patch"
+                + (" (first half identical to the factory patch)." if same else "; please check.")
             )
         fields = decode_patch(unpack_page(record))
         patches.append({patch_key(f.name): _to_bel(f.name, fields[f.name]) for f in PATCH_FIELDS})

@@ -47,7 +47,7 @@ class WebMidiTransport:
 
     def send(self, raw: bytes) -> None:
         if self.sender is None:
-            raise RuntimeError("Aucune sortie MIDI sélectionnée.")
+            raise RuntimeError("No MIDI output selected.")
         self.sender(list(raw))
 
     async def receive(self, timeout_s: float) -> bytes | None:
