@@ -816,6 +816,8 @@ function Advanced({ d, f, N, D, stage, dirty }) {
 
 // ================================================================= bibliothèque
 
+let clipboard = []; // patchs copiés dans la bibliothèque (⌘/Ctrl+C)
+
 function LibraryView({ s, libSel, setLibSel, onOpen }) {
   const [unfolded, setUnfolded] = useState(() => new Set());
   const keep = useMemo(() => (b) => unfolded.has(b), [unfolded]);
@@ -835,10 +837,36 @@ function LibraryView({ s, libSel, setLibSel, onOpen }) {
     last.current = label;
   };
 
+  // ⌘/Ctrl + A, C, V, comme le Librarian officiel : tout choisir, copier, coller à partir du patch choisi.
+  const selRef = useRef(libSel);
+  selRef.current = libSel; // lu au moment de la touche : la sélection vient peut-être de changer
+  useEffect(() => {
+    const onKey = async (e) => {
+      if (!(e.metaKey || e.ctrlKey) || e.target.closest("input, select, textarea")) return;
+      const key = e.key.toLowerCase();
+      const libSel = selRef.current;
+      if (key === "a") { e.preventDefault(); setLibSel(store.state.grid.cells.filter((c) => !c.missing).map((c) => c.patch)); }
+      else if (key === "c" && libSel.length) {
+        e.preventDefault();
+        clipboard = [...libSel].sort((x, y) => indexOf(x) - indexOf(y));
+        toast(`${plural(clipboard.length, "patch")} copied. Select where to paste, then ⌘/Ctrl+V.`, "", 3000);
+      } else if (key === "v" && clipboard.length) {
+        e.preventDefault();
+        if (libSel.length !== 1) { toast("Select the single patch where pasting starts.", "warn"); return; }
+        const start = indexOf(libSel[0]);
+        const pairs = clipboard.map((src, k) => [src, LABELS[start + k]]).filter((p) => p[1]);
+        if (!(await ensureLoaded([...clipboard, ...pairs.map((p) => p[1])]))) return;
+        if (mutate("stage_copy", JSON.stringify(pairs))) toast(`${plural(pairs.length, "patch")} pasted from ${pairs[0][1]}.`, "ok", 3000);
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
+
   return html`
     <div class="library">
       <div class="p-head"><h2>Library</h2><span class="grow"></span>
-        <span class="fresh">Click: select · Shift-click: range · ⌘/Ctrl-click: add · double-click: open ·
+        <span class="fresh">Click: select · Shift-click: range · ⌘/Ctrl-click: add · ⌘/Ctrl+C, V: copy, paste · double-click: open ·
           drag onto a patch: swap · drag onto its edge: move</span></div>
       <${SelectionBar} s=${s} sel=${libSel} clear=${() => setLibSel([])} onOpen=${onOpen} />
       <div class="lib">
