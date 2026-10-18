@@ -34,7 +34,13 @@ un serveur). Accepter l'accès MIDI « avec SysEx » demandé par le navigateur.
   masse (affectation, échange de loops) : modifications en attente, validées
   à l'ajout, visibles dans la grille ;
 - écriture vérifiée (relecture et renvoi, comme `apply --confirm`), précédée
-  d'une sauvegarde automatique dans le navigateur (5 dernières).
+  d'une sauvegarde automatique dans le navigateur (5 dernières) et d'une
+  relecture des seuls patchs visés : les changements s'appliquent sur l'état
+  actuel de l'appareil, jamais sur une lecture ancienne ;
+- dernière lecture gardée par le navigateur et affichée au démarrage (données
+  anciennes en italique) ; clic sur un numéro de banque = relire ses 8 patchs
+  (~2 s), bouton « Relire » dans la fiche d'un patch. Lecture complète :
+  ~2 min 20, rythme imposé par l'ES-8.
 
 ## Lire l'ES-8
 
@@ -205,7 +211,7 @@ vérification par re-dump.
 
    Codes de sortie : 0 succès, 2 changements ou base invalides, 3 écriture
    interrompue (partielle). Rythme : `--interval` entre les deux messages
-   d'une page (défaut 60 ms), `--page-gap` entre deux pages (défaut 0,5 s).
+   d'une page (défaut 60 ms), `--page-gap` entre deux pages (défaut 0,25 s).
 
 4. Re-dumper et vérifier (code 0 si conforme) :
 

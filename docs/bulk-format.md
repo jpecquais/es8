@@ -124,8 +124,11 @@ n'est signalée. Tous les échecs d'écriture via le WIDI s'expliquent ainsi :
 | 5 pages, une par `apply` | juste après un dump | 0 / 5 |
 | **44 pages, pause 0,5 s** | **écran de jeu (EXIT à la main)** | **✅** |
 
-Rythme retenu : 60 ms entre les deux moitiés d'une page, 0,5 s entre pages
-(défauts de `apply`). Un rythme plus rapide reste à tester sur l'écran de jeu.
+Rythme retenu : 60 ms entre les deux moitiés d'une page, **0,25 s entre
+pages** (mesuré via WIDI avec `--confirm` : 0,5 s → ~1,7 % de pages perdues au
+premier passage sur 800 ; 0,25 s → 0 / 40 ; 0,1 s → 4 / 40, rattrapées au
+second tour). La lecture complète reste ~2 min 20 : l'ES-8 émet ~11 messages/s,
+quelle que soit la taille des requêtes (blocs de 8, 50 ou 200 patchs mesurés).
 
 Le WIDI répond lui-même à la requête d'identité universelle
 (`F0 7E 7F 06 02 00 20 63 …`, CME) : c'est un test de la liaison Bluetooth
@@ -195,7 +198,7 @@ systématique par re-dump.
 `es8ctl read`, aucun geste requis.
 
 1. ~~Transformations en masse~~ : faites et vérifiées.
-2. Tester un rythme d'écriture plus rapide (`--page-gap 0.2`) avec `--confirm`.
+2. ~~Rythme d'écriture~~ : 0,25 s entre pages (mesuré).
 3. ~~Commandes directes~~ : `es8ctl patch` (sélection, renommage, copie,
    échange, initialisation), toutes vérifiées sur l'appareil. Un patch
    initialisé = le patch d'usine avec un nom de 16 espaces.

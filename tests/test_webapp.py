@@ -119,3 +119,46 @@ def test_write_pending_confirms_and_resends(monkeypatch):
     assert json.loads(webapp.pending_summary())["frames"] == 0
     assert json.loads(webapp.patch_detail("0-8"))["name"] == "WEB EDIT        "
     assert es8.mem[16 + 2 * 7] == webapp.state["frames"][16 + 2 * 7]  # appareil == état local
+
+
+def test_write_rebases_on_device_changes(monkeypatch):
+    """L'appareil a changé (au panneau) depuis la lecture : la modification en
+    attente s'applique sur la version fraîche, sans écraser ce changement."""
+    import es8ctl.apply as apply_mod
+    from es8ctl.apply import plan_changes
+
+    monkeypatch.setattr(apply_mod, "DEFAULT_PAGE_GAP_S", 0.05)
+    loop = asyncio.new_event_loop()
+    es8 = StatefulES8(loop)
+    panel = plan_changes(list(es8.mem.values()), {"patches": {"0-8": {"master_bpm": 150}}})
+    for f in panel.frames:
+        es8.mem[parse_es8_bulk_frame(f).counter] = f  # modifié sur l'appareil, pas dans l'état local
+    webapp.load_syx(FIXTURE.read_bytes())
+    webapp.discard()
+    webapp.set_sender(lambda data: es8(bytes(data)))
+    webapp.transport.queue = asyncio.Queue()
+    webapp.stage("0-8", json.dumps({"name": "REBASED         "}))
+    result = json.loads(loop.run_until_complete(webapp.write_pending()))
+    loop.close()
+    assert result["confirmed"] is True and result["changed_on_device"] == ["0-8"]
+    detail = json.loads(webapp.patch_detail("0-8"))
+    assert detail["name"] == "REBASED         " and detail["bpm"] == 150
+
+
+def test_cache_and_on_demand_reads():
+    loop = asyncio.new_event_loop()
+    es8 = StatefulES8(loop)
+    webapp.load_cached(FIXTURE.read_bytes(), "2026-10-18T10:00:00")
+    webapp.discard()
+    grid = json.loads(webapp.bank_grid())
+    assert grid["source"] == "cache" and grid["cached_at"].startswith("2026-10-18")
+    assert all(c["stale"] for c in grid["cells"] if not c.get("missing"))
+    webapp.set_sender(lambda data: es8(bytes(data)))
+    webapp.transport.queue = asyncio.Queue()
+    labels = [f"0-{n}" for n in range(1, 9)]
+    result = json.loads(loop.run_until_complete(webapp.read_some(json.dumps(labels), idle_s=0.05)))
+    loop.close()
+    assert result["frames"] == 16 and result["missing_pages"] == []
+    grid = json.loads(webapp.bank_grid())
+    assert [c["stale"] for c in grid["cells"][:9]] == [False] * 8 + [True]
+    assert grid["fresh_patches"] == 8

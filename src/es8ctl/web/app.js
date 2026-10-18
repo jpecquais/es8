@@ -6,6 +6,7 @@
 const PYODIDE_URL = "https://cdn.jsdelivr.net/pyodide/v0.27.7/full/";
 const LIB_DIR = "/home/pyodide/lib";
 const BACKUP_KEY = "es8ctl.backups";
+const CACHE_KEY = "es8ctl.state";
 const MAX_BACKUPS = 5;
 
 const $ = (id) => document.getElementById(id);
@@ -48,6 +49,7 @@ async function boot() {
     fillLoopSelects();
     renderBackups();
     status("Moteur prêt.");
+    restoreCache();
   } catch (err) {
     status(`Échec du chargement du moteur : ${err}`, "error");
     return;
@@ -116,6 +118,7 @@ async function readDevice() {
     } else {
       status(`Appareil lu : ${result.frames} messages.`, "ok");
     }
+    saveCache();
     renderAll();
   } catch (err) {
     status(`Erreur de lecture : ${err}`, "error");
@@ -152,6 +155,51 @@ function download(data, name) {
 
 const stamp = () => new Date().toISOString().slice(0, 19).replace(/[-:T]/g, "");
 
+const toBase64 = (data) => {
+  let binary = "";
+  for (let i = 0; i < data.length; i += 8192) binary += String.fromCharCode(...data.subarray(i, i + 8192));
+  return btoa(binary);
+};
+const fromBase64 = (text) => Uint8Array.from(atob(text), (c) => c.charCodeAt(0));
+
+// ---------------------------------------------------------------- dernière lecture gardée
+
+function saveCache() {
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ date: new Date().toISOString(), data: toBase64(currentSyx()) }));
+  } catch { /* stockage plein : le cache est un confort, pas une sauvegarde */ }
+}
+
+function restoreCache() {
+  let cached = null;
+  try { cached = JSON.parse(localStorage.getItem(CACHE_KEY) || "null"); } catch { cached = null; }
+  if (!cached) return;
+  try {
+    bridge.load_cached(fromBase64(cached.data), cached.date);
+    renderAll();
+    status(`Dernier état connu (${new Date(cached.date).toLocaleString()}). ` +
+      "Cliquez sur un numéro de banque pour la relire, ou « Lire l'appareil » pour tout relire.", "warn");
+  } catch { localStorage.removeItem(CACHE_KEY); }
+}
+
+async function readSome(labels, what) {
+  if (!hasDevice() || busy) return;
+  setBusy(true);
+  status(`Relecture ${what}…`);
+  try {
+    const result = JSON.parse(await bridge.read_some(JSON.stringify(labels), (n, total) => progress(n, total)));
+    if (result.missing_pages.length) status(`Relecture ${what} incomplète.`, "warn");
+    else status(`${what[0].toUpperCase() + what.slice(1)} relu${labels.length > 1 ? "s" : ""}.`, "ok");
+    saveCache();
+  } catch (err) {
+    status(`Erreur de relecture : ${err}`, "error");
+  } finally {
+    progress(null);
+    setBusy(false);
+    renderAll();
+  }
+}
+
 // ---------------------------------------------------------------- sauvegardes (navigateur)
 
 function loadBackups() {
@@ -159,9 +207,7 @@ function loadBackups() {
 }
 
 function storeBackup(data) {
-  let binary = "";
-  for (let i = 0; i < data.length; i += 8192) binary += String.fromCharCode(...data.subarray(i, i + 8192));
-  const list = [{ date: new Date().toISOString(), data: btoa(binary) }, ...loadBackups()].slice(0, MAX_BACKUPS);
+  const list = [{ date: new Date().toISOString(), data: toBase64(data) }, ...loadBackups()].slice(0, MAX_BACKUPS);
   try {
     localStorage.setItem(BACKUP_KEY, JSON.stringify(list));
   } catch {
@@ -181,8 +227,7 @@ function renderBackups() {
     link.textContent = new Date(item.date).toLocaleString();
     link.onclick = (e) => {
       e.preventDefault();
-      const bytes = Uint8Array.from(atob(item.data), (c) => c.charCodeAt(0));
-      download(bytes, `backup_${item.date.slice(0, 19).replace(/[-:T]/g, "")}.syx`);
+      download(fromBase64(item.data), `backup_${item.date.slice(0, 19).replace(/[-:T]/g, "")}.syx`);
     };
     li.appendChild(link);
     root.appendChild(li);
@@ -229,22 +274,29 @@ async function writePending() {
   const summary = call("pending_summary");
   const ok = confirm(
     `Écrire ${summary.frames / 2} page(s) sur l'ES-8 (environ ${summary.estimated_s} s) ?\n\n` +
+    "Les patchs visés sont d'abord relus : vos changements s'appliquent sur leur état actuel.\n" +
     "L'ES-8 doit être sur l'écran de jeu : après un dump au panneau, appuyer sur EXIT, " +
     "sinon les pages sont ignorées. Une sauvegarde de l'état actuel est faite d'abord.");
   if (!ok) return;
   setBusy(true);
   storeBackup(currentSyx());
-  const labels = { send: "Envoi", read: "Relecture", resend: "Renvoi" };
+  const labels = { refresh: "Relecture préalable", send: "Envoi", read: "Vérification", resend: "Renvoi" };
   try {
     const result = JSON.parse(await bridge.write_pending((phase, n, total) => {
       status(`${labels[phase] || phase} : ${n} / ${total}`);
       progress(n, total);
     }));
-    if (result.confirmed) {
-      status(`Écriture confirmée par relecture (${result.frames / 2} page(s), ${result.history.length} tour(s)).`, "ok");
+    const drift = result.changed_on_device && result.changed_on_device.length
+      ? ` Modifié sur l'appareil depuis la lecture, vos changements y ont été appliqués : ${result.changed_on_device.join(", ")}.` : "";
+    if (result.error) {
+      status(result.error, "error");
+    } else if (result.confirmed) {
+      status((result.note || `Écriture confirmée par relecture (${result.frames / 2} page(s), ` +
+        `${result.history.length} tour(s)).`) + drift, "ok");
     } else {
-      status(`Non confirmé après renvois : ${result.not_confirmed.join(", ")} — toujours en attente.`, "warn");
+      status(`Non confirmé après renvois : ${result.not_confirmed.join(", ")} — toujours en attente.${drift}`, "warn");
     }
+    saveCache();
   } catch (err) {
     status(`Erreur d'écriture : ${err} — re-lire l'appareil avant de continuer.`, "error");
   } finally {
@@ -289,7 +341,11 @@ function renderGrid() {
   $("btn-save").dataset.off = "0";
   $("btn-save").disabled = busy;
   $("transforms").hidden = false;
-  $("source").textContent = grid.source === "device" ? "depuis l'appareil" : "depuis un fichier";
+  $("source").textContent = {
+    device: "depuis l'appareil",
+    file: "depuis un fichier",
+    cache: `état du ${new Date(grid.cached_at).toLocaleString()} · ${grid.fresh_patches} patch(s) relu(s)`,
+  }[grid.source] || "";
   const filter = $("filter").value.trim().toLowerCase();
   const root = $("grid");
   root.className = "grid";
@@ -299,7 +355,12 @@ function renderGrid() {
     if (filter && !cells.some((c) => (c.name || "").toLowerCase().includes(filter))) continue;
     const row = document.createElement("div");
     row.className = "bank";
-    row.innerHTML = `<span class="bank-no">${bank}</span>`;
+    const no = document.createElement("button");
+    no.className = "bank-no";
+    no.textContent = bank;
+    no.title = hasDevice() ? `Relire la banque ${bank}` : `Banque ${bank}`;
+    no.onclick = () => readSome([...Array(8).keys()].map((n) => `${bank}-${n + 1}`), `de la banque ${bank}`);
+    row.appendChild(no);
     for (const cell of cells) {
       const el = document.createElement("button");
       el.className = "cell";
@@ -307,6 +368,7 @@ function renderGrid() {
       if (cell.patch === grid.current) el.classList.add("current");
       if (cell.patch === selected) el.classList.add("selected");
       if (cell.pending) el.classList.add("pending");
+      if (cell.stale) el.classList.add("stale");
       if (cell.name === "BOSS ES-8") el.classList.add("factory");
       if (filter && !(cell.name || "").toLowerCase().includes(filter)) el.classList.add("dim");
       el.innerHTML = `<span class="no">${cell.patch}</span>` +
@@ -340,7 +402,8 @@ function renderDetail(label) {
   root.innerHTML = `
     <div class="detail-head">
       <h2><span class="no">${d.patch}</span> ${escapeHtml(d.name.trimEnd() || "(sans nom)")}</h2>
-      <button id="btn-edit">Modifier</button>
+      <span><button id="btn-reread" title="Relire ce patch sur l'appareil">Relire</button>
+      <button id="btn-edit">Modifier</button></span>
     </div>
     ${pendingNote}
     <div class="kv"><span>Tempo</span><strong>${d.bpm} BPM</strong></div>
@@ -359,6 +422,8 @@ function renderDetail(label) {
     ${d.warnings.length ? `<p class="warn">${d.warnings.join("<br>")}</p>` : ""}
     <details><summary>Tous les champs</summary><pre>${escapeHtml(JSON.stringify(d.fields, null, 1))}</pre></details>`;
   $("btn-edit").onclick = () => renderEditor(d);
+  $("btn-reread").disabled = !hasDevice() || busy;
+  $("btn-reread").onclick = () => readSome([d.patch], `du patch ${d.patch}`);
   if ($("btn-undo-patch")) $("btn-undo-patch").onclick = () => { bridge.discard(label); renderAll(); };
 }
 

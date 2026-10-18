@@ -62,7 +62,10 @@ class WebMidiTransport:
 
 
 transport = WebMidiTransport()
-state: dict = {"frames": {}, "dump": None, "source": None}
+# frames : trames connues par ID ; fresh : IDs lus sur l'appareil pendant cette
+# session ; source : « device », « cache » (dernière lecture gardée par le
+# navigateur) ou « file » ; cached_at : date de cette lecture gardée.
+state: dict = {"frames": {}, "dump": None, "source": None, "fresh": set(), "cached_at": None}
 pending: dict = {"patches": {}, "system": {}}
 _preview_cache: dict = {}
 
@@ -84,6 +87,23 @@ def _set_frames(frames: dict[int, bytes], source: str) -> None:
     _preview_cache.clear()
 
 
+def _merge_read(frames: dict[int, bytes]) -> None:
+    """Intègre une lecture partielle de l'appareil dans l'état connu."""
+    merged = dict(state["frames"])
+    merged.update(frames)
+    state["fresh"] |= set(frames)
+    _set_frames(merged, state["source"] or "device")
+
+
+def _pages_of(labels) -> list[int]:
+    from .codec import parse_patch_label
+
+    pages = []
+    for label in labels:
+        pages += list(range(8)) if label == "system" else [patch_page(parse_patch_label(label))]
+    return pages
+
+
 async def read_device(on_progress=None, idle_s: float = DEFAULT_IDLE_S) -> str:
     """Lit système + 800 patchs ; rend un résumé JSON."""
     while not transport.queue.empty():
@@ -94,7 +114,29 @@ async def read_device(on_progress=None, idle_s: float = DEFAULT_IDLE_S) -> str:
         on_progress=(lambda n, t: on_progress(n, t)) if on_progress else None,
     )
     _set_frames(frames, "device")
+    state["fresh"] = set(frames)
+    state["cached_at"] = None
     return json.dumps({"frames": len(frames), "missing_pages": missing})
+
+
+async def read_some(labels_json: str, on_progress=None, idle_s: float = DEFAULT_IDLE_S) -> str:
+    """Relit des patchs (« 3-1 ») et/ou le système (« system ») ; fusionne dans l'état."""
+    labels = json.loads(labels_json)
+    while not transport.queue.empty():
+        transport.queue.get_nowait()
+    frames, missing = await read_pages_async(
+        transport, _pages_of(labels), idle_s=idle_s,
+        on_progress=(lambda n, t: on_progress(n, t)) if on_progress else None,
+    )
+    _merge_read(frames)
+    return json.dumps({"frames": len(frames), "missing_pages": missing})
+
+
+def load_cached(data, cached_at: str) -> str:
+    """Dernière lecture gardée par le navigateur : affichée, mais marquée « ancienne »."""
+    result = load_syx(data)
+    state["source"], state["cached_at"], state["fresh"] = "cache", cached_at, set()
+    return result
 
 
 def load_syx(data) -> str:
@@ -103,6 +145,7 @@ def load_syx(data) -> str:
 
     frames = {parse_es8_bulk_frame(f).counter: f for f in split_frames(raw)}
     _set_frames(frames, "file")
+    state["fresh"], state["cached_at"] = set(), None
     return json.dumps({"frames": len(frames), "patches": len(state["dump"].patches)})
 
 
@@ -247,6 +290,31 @@ async def write_pending(on_progress=None) -> str:
         return json.dumps({"confirmed": True, "history": [], "not_confirmed": [], "frames": 0})
     while not transport.queue.empty():
         transport.queue.get_nowait()
+
+    # 1. Relire les seules pages visées : ne jamais écrire à partir d'un état ancien.
+    #    Les modifications sont des champs : elles se réappliquent sur la version fraîche.
+    def report(phase):
+        return (lambda n, t: on_progress(phase, n, t)) if on_progress else None
+
+    targets = sorted({parse_es8_bulk_frame(f).counter // 2 for f in plan.frames})
+    fresh, missing = await read_pages_async(transport, targets, on_progress=report("refresh"))
+    if missing:
+        return json.dumps({"confirmed": False, "error": "Relecture préalable incomplète : rien n'a été écrit.",
+                           "history": [], "not_confirmed": [], "frames": 0})
+    changed_on_device = sorted(
+        patch_label(p - 8) if p >= 8 else "system"
+        for p in targets
+        if any(fresh[c] != state["frames"].get(c) for c in (2 * p, 2 * p + 1))
+    )
+    _merge_read(fresh)
+    plan = _plan()  # recalculé sur la version fraîche (pages éventuellement inchangées retirées)
+    if not plan.frames:
+        pending = {"patches": {}, "system": {}}
+        _preview_cache.clear()
+        return json.dumps({"confirmed": True, "history": [], "not_confirmed": [], "frames": 0,
+                           "changed_on_device": changed_on_device, "note": "Déjà à jour sur l'appareil."})
+
+    # 2. Écrire, relire, renvoyer.
     result = await write_confirmed_async(
         transport, plan.frames, DEFAULT_INTERVAL_S, DEFAULT_PAGE_GAP_S,
         on_progress=(lambda phase, n, t: on_progress(phase, n, t)) if on_progress else None,
@@ -259,13 +327,15 @@ async def write_pending(on_progress=None) -> str:
     for counter, frame in expected.items():
         if counter // 2 not in failed_pages:
             frames[counter] = frame
+            state["fresh"].add(counter)
     not_confirmed = sorted(patch_label(p - 8) if p >= 8 else "system" for p in failed_pages)
     kept = {"patches": {k: v for k, v in pending["patches"].items() if k in not_confirmed},
             "system": pending["system"] if "system" in not_confirmed else {}}
     _set_frames(frames, state["source"] or "device")
     pending = kept
     return json.dumps({"confirmed": result["confirmed"], "history": result["history"],
-                       "not_confirmed": not_confirmed, "frames": len(plan.frames)})
+                       "not_confirmed": not_confirmed, "frames": len(plan.frames),
+                       "changed_on_device": changed_on_device})
 
 
 def names() -> str:
@@ -288,6 +358,7 @@ def bank_grid() -> str:
         cells.append({
             "patch": patch_label(index),
             "pending": patch_label(index) in pending["patches"],
+            "stale": state["source"] == "cache" and patch_page(index) * 2 not in state["fresh"],
             "name": fields["name"].rstrip(),
             "chain": render(fields["loop_position"]),
             "bpm": fields["master_bpm"],
@@ -296,7 +367,9 @@ def bank_grid() -> str:
     current = None
     if state["dump"] and state["dump"].system is not None:
         current = patch_label(decode_system(state["dump"].system)["current_num"])
-    return json.dumps({"source": state["source"], "current": current, "cells": cells,
+    return json.dumps({"source": state["source"], "cached_at": state["cached_at"],
+                       "fresh_patches": len({c // 2 for c in state["fresh"] if c >= 16}),
+                       "current": current, "cells": cells,
                        "pending_count": len(pending["patches"]) + bool(pending["system"])})
 
 

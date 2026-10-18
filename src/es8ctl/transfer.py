@@ -6,7 +6,7 @@ minimal entre deux messages.
 
 Rythme : les deux messages d'une page partent à `interval_s` d'écart (la
 spec exige ≥ 50 ms et un envoi « consécutif » de la page), puis une pause
-`page_gap_s` précède la page suivante (0,5 s validé sur 44 pages via WIDI).
+`page_gap_s` précède la page suivante (0,25 s par défaut, voir apply.py).
 
 Précondition côté appareil (apply.DEVICE_PRECONDITION) : l'ES-8 ignore tout
 bulk dump reçu tant qu'il est sur l'écran Utility > Bulk Dump. Aucun

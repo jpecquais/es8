@@ -42,8 +42,9 @@ from .system import SYSTEM_PAGES, decode_system, encode_system
 
 # Spec Roland : au moins 50 ms entre deux messages. Marge de sécurité.
 DEFAULT_INTERVAL_S = 0.06
-# Pause entre deux pages (voir transfer.py) : 0,5 s validé sur 44 pages via WIDI.
-DEFAULT_PAGE_GAP_S = 0.5
+# Pause entre deux pages (voir transfer.py). Via WIDI : 0,5 s → ~1,7 % de pages
+# perdues au 1er passage (800 pages) ; 0,25 s → 0 / 40 ; 0,1 s → 4 / 40.
+DEFAULT_PAGE_GAP_S = 0.25
 
 # Condition côté appareil, établie le 2026-10-18 : sur l'écran Utility > Bulk
 # Dump (où il reste après un dump déclenché au panneau), l'ES-8 ignore
