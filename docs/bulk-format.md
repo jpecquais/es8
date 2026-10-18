@@ -238,3 +238,20 @@ confirmer les champs marqués `inferred` et les écarts v2 : réglage du mixer
 sur 0-1, MIDI clock out d'un patch, un réglage système (contraste LCD), sens
 des marqueurs 10–15 de `loop_position`, position de `tempo_hold` (basculer
 le réglage, comparer le bloc système).
+
+## Écritures interrompues (simulées, 2026-10-18)
+
+`tests/test_interrupted_write.py` coupe le lien d'un faux ES-8 à différents
+moments d'une écriture de 6 patchs (champs dans les deux moitiés de page) :
+
+| Scénario | Résultat |
+|---|---|
+| 3 messages perdus en plein envoi | relecture → pages manquantes renvoyées → confirmé |
+| lien perdu pour de bon après 2,5 pages | rien n'est tenu pour écrit, tout reste en attente ; au retour du lien, la relecture préalable voit les pages déjà à jour et n'envoie que le reste → confirmé |
+| demi-page prise seule par l'appareil (hypothèse pessimiste) | la page incohérente est vue à la vérification et renvoyée → confirmé |
+| port MIDI disparu en plein envoi (exception) | état local intact, modifications en attente ; nouvelle écriture → confirmé |
+| l'ES-8 ne répond pas (mauvais port, écran Bulk Dump) | la relecture préalable échoue : rien n'est envoyé |
+
+Reste inconnu sur le vrai appareil : ce qu'il fait d'une demi-page seule.
+Les deux hypothèses sont couvertes ; la vérification par relecture rend la
+question sans conséquence tant qu'on relit avant de considérer une page écrite.
