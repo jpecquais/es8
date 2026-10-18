@@ -67,3 +67,17 @@ def test_resolve_port_handles_mojibake_and_prefix():
     assert resolve_port("widi", ports) == ports[1]
     assert resolve_port("WIDI Jack Bluetooth", ports) == ports[1]
     assert resolve_port("nope", ports) is None
+
+
+def test_relay_with_separate_device_input(tmp_path, monkeypatch):
+    sent = {"editor": [], "device": []}
+    inputs = {"ed": FakeIn([REQUEST, None, None, KeyboardInterrupt()]), "wired": FakeIn([None, REPLY]),
+              "widi": FakeIn([RuntimeError("le port WIDI ne doit pas être écouté")])}
+    opened = []
+    monkeypatch.setattr(mido, "open_input", lambda p: opened.append(p) or inputs[p])
+    monkeypatch.setattr(mido, "open_output", lambda p: FakeOut(sent["editor" if p == "ed" else "device"]))
+
+    relay("ed", "widi", tmp_path, device_in_port="wired")
+
+    assert opened == ["ed", "wired"]
+    assert sent["device"] == [REQUEST] and sent["editor"] == [REPLY]

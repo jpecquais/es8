@@ -49,8 +49,14 @@ def relay(
     log_dir: Path,
     timeout_s: float | None = None,
     on_message: Callable[[str, dict], None] | None = None,
+    device_in_port: str | None = None,
 ) -> SniffResult:
-    """Relaie et journalise jusqu'à Ctrl-C (ou `timeout_s`)."""
+    """Relaie et journalise jusqu'à Ctrl-C (ou `timeout_s`).
+
+    `device_in_port` : port d'écoute de l'ES-8 s'il diffère du port d'envoi
+    (ex. envoi par le WIDI, réception par une interface filaire sur la MIDI
+    OUT de l'ES-8 — le WIDI répond lui-même aux requêtes d'identité).
+    """
     import mido
 
     log_dir.mkdir(parents=True, exist_ok=True)
@@ -61,7 +67,7 @@ def relay(
         with (
             mido.open_input(editor_port) as from_editor,
             mido.open_output(editor_port) as to_editor,
-            mido.open_input(device_port) as from_device,
+            mido.open_input(device_in_port or device_port) as from_device,
             mido.open_output(device_port) as to_device,
             result.log_path.open("w", encoding="utf-8") as log,
         ):

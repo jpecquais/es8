@@ -492,6 +492,9 @@ def import_bel_cmd(
 def sniff(
     editor: str = typer.Option(..., "--editor", help="Port côté éditeur (ex. session réseau rtpMIDI)."),
     device: str = typer.Option(..., "--device", help="Port côté ES-8 (ex. WIDI Jack Bluetooth)."),
+    device_in: str = typer.Option(
+        None, "--device-in", help="Port d'écoute de l'ES-8, s'il diffère de --device (ex. interface filaire)."
+    ),
     out_dir: Path = typer.Option(Path("captures"), "--out", "-o", help="Répertoire du journal."),
     timeout: float = typer.Option(None, "--timeout", "-t", help="Durée en secondes (sinon Ctrl-C)."),
 ) -> None:
@@ -505,13 +508,14 @@ def sniff(
     from .transfer import resolve_port
 
     inputs, outputs = list_ports(), list_output_ports()
-    resolved = []
-    for name in (editor, device):
-        port = resolve_port(name, inputs)
-        if port is None or port not in outputs:
-            _fail(2, error=f"Port introuvable en entrée/sortie : {name}", inputs=inputs, outputs=outputs)
-        resolved.append(port)
-    editor, device = resolved
+    editor_port = resolve_port(editor, inputs)
+    if editor_port is None or editor_port not in outputs:
+        _fail(2, error=f"Port éditeur introuvable en entrée/sortie : {editor}", inputs=inputs, outputs=outputs)
+    device_out = resolve_port(device, outputs)
+    device_listen = resolve_port(device_in or device, inputs)
+    if device_out is None or device_listen is None:
+        _fail(2, error="Port ES-8 introuvable.", inputs=inputs, outputs=outputs)
+    editor, device = editor_port, device_out
     if editor == device:
         _fail(2, error="Les ports éditeur et ES-8 doivent être différents.")
 
@@ -519,9 +523,11 @@ def sniff(
         arrow = "→ ES-8 " if direction.startswith("editor") else "← ES-8 "
         typer.echo(f"{entry['t']:9.3f} {arrow}{entry['type']:<14} {entry['hex'][:60]}", err=True)
 
-    typer.echo(f"Relais {editor} ⇄ {device} : connecter l'éditeur. Ctrl-C pour arrêter.", err=True)
+    typer.echo(f"Relais {editor} ⇄ ES-8 (envoi {device}, écoute {device_listen}) : connecter "
+               "l'éditeur. Ctrl-C pour arrêter.", err=True)
     try:
-        result = relay(editor, device, out_dir, timeout_s=timeout, on_message=show)
+        result = relay(editor, device, out_dir, timeout_s=timeout, on_message=show,
+                       device_in_port=device_listen)
     except Exception as exc:  # surface explicite
         _fail(1, error=str(exc))
     _print_json(result.summary())
