@@ -1,4 +1,4 @@
-"""CLI es8ctl : devices · capture · inspect · diff · patches · system · transform · apply · verify.
+"""CLI es8ctl : devices · capture · inspect · diff · patches · system · transform · apply · verify · check · export-bel · import-bel.
 
 Sortie JSON machine-first par défaut. Seule `apply --write` émet vers l'ES-8,
 après validation complète et sauvegarde horodatée du dump de base.
@@ -19,7 +19,7 @@ from .codec import BULK_LAST_COUNTER, CodecError, parse_patch_label, patch_label
 from .diff import diff_files, load_dump
 from .patch import FIRMWARE, SCHEMA_VERSION, decode_patch, out_of_range
 from .system import decode_system, system_out_of_range
-from .apply import DEFAULT_INTERVAL_S, plan_changes
+from .apply import DEFAULT_INTERVAL_S, DEFAULT_PAGE_GAP_S, check_changes, plan_changes
 from . import transform as tf
 from .routing import render as render_chain
 from .codec import split_frames
@@ -327,7 +327,11 @@ def apply(
     ),
     backup_dir: Path = typer.Option(Path("backups"), "--backup-dir", help="Répertoire des sauvegardes."),
     interval: float = typer.Option(
-        DEFAULT_INTERVAL_S, "--interval", help="Délai entre messages en secondes (≥ 0,05, spec Roland)."
+        DEFAULT_INTERVAL_S, "--interval",
+        help="Délai entre les deux messages d'une page, en secondes (≥ 0,05, spec Roland).",
+    ),
+    page_gap: float = typer.Option(
+        DEFAULT_PAGE_GAP_S, "--page-gap", help="Pause entre deux pages, en secondes (≥ 0,05)."
     ),
 ) -> None:
     """Applique des changements à l'ES-8. Simulation par défaut ; --write pour envoyer.
@@ -350,7 +354,7 @@ def apply(
         "base": str(base),
         "changes": plan.changes,
         "frames": len(plan.frames),
-        "estimated_s": round(plan.duration_s(interval), 1),
+        "estimated_s": round(plan.duration_s(interval, page_gap), 1),
         "expected": str(expected),
     }
     if not plan.frames:
@@ -376,7 +380,7 @@ def apply(
         typer.echo(f"\r{n}/{total} message(s) envoyé(s)   ", err=True, nl=False)
 
     try:
-        send_frames(port, plan.frames, interval_s=interval, on_frame=progress)
+        send_frames(port, plan.frames, interval_s=interval, on_frame=progress, page_gap_s=page_gap)
     except (KeyboardInterrupt, Exception) as exc:  # écriture partielle : toujours signalée
         typer.echo("", err=True)
         _fail(3, **report, error=f"Écriture interrompue : {exc!r}", sent=sent)
@@ -406,6 +410,62 @@ def verify(
     _print_json({"match": match, **result})
     if not match:
         raise typer.Exit(code=1)
+
+
+@app.command()
+def check(
+    changes: Path = typer.Argument(..., exists=True, readable=True, help="Changements JSON."),
+    actual: Path = typer.Argument(..., exists=True, readable=True, help="Dump capturé après écriture."),
+) -> None:
+    """Vérifie, patch par patch, que des changements sont présents dans un dump.
+
+    Code 0 si tous sont appliqués, 1 sinon, 2 erreur.
+    """
+    try:
+        result = check_changes(
+            list(split_frames(actual.read_bytes())), json.loads(changes.read_text(encoding="utf-8"))
+        )
+    except (OSError, json.JSONDecodeError, CodecError, ValueError) as exc:
+        _fail(2, error=str(exc))
+    _print_json(result)
+    if result["applied_count"] != result["total"]:
+        raise typer.Exit(code=1)
+
+
+@app.command("export-bel")
+def export_bel_cmd(
+    syx: Path = typer.Argument(..., exists=True, readable=True, help="Bulk dump complet (.syx)."),
+    out: Path = typer.Option(..., "--out", "-o", help="Fichier .bel à écrire."),
+) -> None:
+    """Exporte un dump au format .bel de l'éditeur officiel BOSS."""
+    from .bel import export_bel
+    from .codec import frames_by_counter
+
+    try:
+        frames = list(split_frames(syx.read_bytes()))
+        document, warnings = export_bel(load_dump(syx), frames_by_counter(frames))
+    except (OSError, CodecError, ValueError) as exc:
+        _fail(2, error=str(exc), file=str(syx))
+    out.write_text(json.dumps(document), encoding="utf-8")
+    _print_json({"bel": str(out), "patches": len(document["patch"]), "warnings": warnings})
+
+
+@app.command("import-bel")
+def import_bel_cmd(
+    bel: Path = typer.Argument(..., exists=True, readable=True, help="Fichier .bel de l'éditeur."),
+    base: Path = typer.Option(..., "--base", "-b", exists=True, readable=True, help="Dump actuel de l'ES-8."),
+    out: Path = typer.Option(None, "--out", "-o", help="Changements JSON (sinon stdout)."),
+) -> None:
+    """Convertit un .bel en changements JSON pour `es8ctl apply` (différences avec la base)."""
+    from .bel import import_bel
+
+    try:
+        changes, warnings = import_bel(json.loads(bel.read_text(encoding="utf-8")), load_dump(base))
+    except (OSError, json.JSONDecodeError, CodecError, ValueError) as exc:
+        _fail(2, error=str(exc), file=str(bel))
+    _emit_changes(changes, out, {"op": "import-bel", "bel": str(bel),
+                                 "system_changed": sorted(changes.get("system", {})),
+                                 "warnings": warnings})
 
 
 def main() -> None:

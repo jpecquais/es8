@@ -74,7 +74,8 @@ PATCH_NAME_CHAR_BITS = 7
 SYSTEM_FIRST_COUNTER = 0
 SYSTEM_FRAMES = 16
 PATCH_FIRST_COUNTER = SYSTEM_FIRST_COUNTER + SYSTEM_FRAMES
-BULK_LAST_COUNTER = 1614
+BULK_LAST_COUNTER = 1614  # dernière trame reçue sur toutes les captures (0C 4E)
+SPEC_LAST_COUNTER = 1615  # dernière trame selon la spec Roland (0C 4F), jamais reçue
 
 
 @dataclass(frozen=True)

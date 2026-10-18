@@ -9,7 +9,13 @@ import json
 import mido
 
 from es8ctl.capture import record
-from es8ctl.codec import BULK_DATA_LEN, BULK_LAST_COUNTER, build_es8_bulk_frame, build_frame
+from es8ctl.codec import (
+    BULK_DATA_LEN,
+    BULK_LAST_COUNTER,
+    SPEC_LAST_COUNTER,
+    build_es8_bulk_frame,
+    build_frame,
+)
 
 # Trames valides pour une adresse de 4 octets (défaut de record()).
 GOOD = build_frame(0x10, 0x42, 0x12, (0x40, 0x00, 0x00, 0x7F), [0x00])
@@ -107,17 +113,28 @@ def _bulk(counter):
     return FakeMsg("sysex", build_es8_bulk_frame(counter, bytes(BULK_DATA_LEN))[1:-1])
 
 
-def test_auto_stop_on_last_bulk_frame(tmp_path, monkeypatch):
-    """La capture se termine seule à la dernière trame du dump : la trame
-    suivante du script (qui ferait échouer le test) n'est jamais lue."""
-    script = [_bulk(BULK_LAST_COUNTER - 1), _bulk(BULK_LAST_COUNTER), RuntimeError("lu trop loin")]
+def test_auto_stop_after_tail_following_last_frame(tmp_path, monkeypatch):
+    """Après la dernière trame observée (0C 4E), la capture attend `tail_s`
+    une éventuelle trame 0C 4F, puis s'arrête seule."""
+    script = [_bulk(BULK_LAST_COUNTER - 1), _bulk(BULK_LAST_COUNTER)]
     monkeypatch.setattr(mido, "open_input", lambda port: FakeInput(script))
     progress = []
 
-    result = record("fake", tmp_path, on_frame=lambda n, c: progress.append((n, c)))
+    result = record("fake", tmp_path, tail_s=0.05, on_frame=lambda n, c: progress.append((n, c)))
 
     assert result.frame_count == 2
     assert progress == [(1, BULK_LAST_COUNTER - 1), (2, BULK_LAST_COUNTER)]
+
+
+def test_spec_last_frame_is_captured_and_stops(tmp_path, monkeypatch):
+    """Si la trame 0C 4F de la spec arrive, elle est gardée et la capture
+    s'arrête aussitôt : la suite du script (qui ferait échouer) n'est pas lue."""
+    script = [_bulk(BULK_LAST_COUNTER), _bulk(SPEC_LAST_COUNTER), RuntimeError("lu trop loin")]
+    monkeypatch.setattr(mido, "open_input", lambda port: FakeInput(script))
+
+    result = record("fake", tmp_path, tail_s=10)
+
+    assert result.frame_count == 2
 
 
 def test_no_auto_stop_keeps_listening(tmp_path, monkeypatch):

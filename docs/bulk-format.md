@@ -107,6 +107,41 @@ Via un CME WIDI Jack (Bluetooth MIDI) branché sur l'ES-8 : une seule page
 enregistrée. L'ES-8 accepte donc une page isolée, sans dump complet. Via le
 MIDISPORT Uno, rien n'atteignait l'ES-8, pas même un Program Change.
 
+### Écriture de nombreuses pages via WIDI (2026-10-18)
+
+| Envoi | Rythme | Résultat (vérifié par dump) |
+|---|---|---|
+| 1 page (49-1, puis 10-3) | 60 ms entre les 2 moitiés | OK, 2 fois sur 2 |
+| 50 pages (variantes 10-1…16-2) | 60 ms entre tous les messages | 5 / 50 (10-1, 10-2, 10-5…10-7), puis plus rien ; entrée WIDI muette ensuite jusqu'à reconnexion |
+| 45 pages restantes | 300 ms entre tous les messages | 0 / 45 |
+
+Hypothèse : l'ES-8 rejette une page dont les deux moitiés sont trop
+espacées (la spec exige un envoi « consécutif »), et le WIDI sature sur un
+flux continu. D'où le rythme par page de `transfer.py` (`--interval` entre
+moitiés, `--page-gap` entre pages). Expérience lancée, à vérifier par dump
+(journal : `captures/experiment_pacing_20261018.json`) :
+
+| Lot | Patchs | `--page-gap` |
+|---|---|---|
+| 1 | 10-4, 10-8, 11-1…11-8 (10) | 1,0 s |
+| 2 | 12-1…13-8 (16) | 0,5 s |
+| 3 | 14-1…16-2 (18) | 0,2 s |
+
+Autres constats : l'ES-8 ne répond ni aux requêtes RQ1 (plusieurs formes
+essayées) ni à la requête d'identité universelle — c'est le WIDI qui répond
+à cette dernière (`F0 7E 7F 06 02 00 20 63 …`, constructeur CME). Pas de
+relecture possible sans déclencher le dump au panneau.
+
+### Validation par un `.bel` de l'éditeur officiel
+
+Le `test_1.bel` de l'oracle (autre ES-8, exporté par l'éditeur BOSS)
+s'importe sans aucune valeur hors bornes ; 649 de ses 800 patchs sont
+identiques, champ par champ, à notre décodage des patchs d'usine. Nos
+champs ont les mêmes noms et le même ordre que les clés du `.bel` (seule
+exception : `ID_PATCH_LOOP_SW_LOOP` ↔ `loop_sw`). Les 10 clés système non
+localisées suivent `EXP_MAX` dans le `.bel` : elles sont très probablement
+aux bits 271+ de la page système 1 (à zéro sur nos dumps).
+
 ### Fiabilité de la liaison DIN (MIDISPORT Uno)
 
 Le dump 4 (`dump_20261017_195509`) contient une trame de 152 octets au lieu
@@ -115,6 +150,19 @@ pauses de plusieurs minutes en cours de dump, c'est un argument pour l'USB.
 À l'écriture, une trame corrompue en route peut être rejetée par l'ES-8 —
 ou, avec une faible probabilité, passer le checksum : d'où la vérification
 systématique par re-dump.
+
+## Prochaine session matériel
+
+1. Déclencher un dump (`es8ctl capture --port "WIDI Jack Bluetooth"` lancé
+   avant), puis :
+   `for g in 1.0 0.5 0.2; do es8ctl check captures/changes_pacing_gap$g.json captures/<dump>.syx; done`
+   → fixe le `--page-gap` par défaut.
+2. Ce même dump dira si la trame 0C 4F existe : la capture attend désormais
+   3 s après 0C 4E.
+3. Basculer `Tempo Hold` dans les réglages système, dumper, `es8ctl diff`
+   → position de `tempo_hold` (puis `LINK`, `MANUAL_NUMBER`).
+4. Une fois le rythme fixé : écrire les transformations en masse (tap
+   tempo partout, échange 6 ↔ 7) et vérifier avec `es8ctl check`.
 
 ## Questions ouvertes
 

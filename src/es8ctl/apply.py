@@ -42,6 +42,8 @@ from .system import SYSTEM_PAGES, decode_system, encode_system
 
 # Spec Roland : au moins 50 ms entre deux messages. Marge de sécurité.
 DEFAULT_INTERVAL_S = 0.06
+# Pause entre deux pages (voir transfer.py) ; valeur prudente, à affiner.
+DEFAULT_PAGE_GAP_S = 1.0
 
 
 @dataclass(frozen=True)
@@ -52,8 +54,11 @@ class Plan:
     changes: list[dict]
     expected: bytes  # dump complet attendu après écriture (.syx)
 
-    def duration_s(self, interval_s: float = DEFAULT_INTERVAL_S) -> float:
-        return len(self.frames) * interval_s
+    def duration_s(
+        self, interval_s: float = DEFAULT_INTERVAL_S, page_gap_s: float = DEFAULT_PAGE_GAP_S
+    ) -> float:
+        pages = len(self.frames) // PATCH_FRAMES
+        return pages * interval_s + max(pages - 1, 0) * page_gap_s
 
 
 def _page_frames(first_counter: int, record: bytes) -> list[bytes]:
@@ -133,3 +138,45 @@ def plan_changes(base_frames: list[bytes], changes: dict) -> Plan:
         build_es8_bulk_frame(counter, new_data[counter]) for counter in sorted(new_data)
     )
     return Plan(frames=frames, changes=diffs, expected=expected)
+
+
+def check_changes(actual_frames: list[bytes], changes: dict) -> dict:
+    """Vérifie, patch par patch, que les valeurs demandées sont dans un dump.
+
+    Complète `verify` : utile quand plusieurs écritures partent d'une même
+    base, ou pour savoir précisément quelles pages d'un envoi sont arrivées.
+    """
+    if not isinstance(changes, dict) or set(changes) - {"patches", "system"}:
+        raise CodecError('Changements : objet JSON avec les clés "patches" et/ou "system".')
+    dump = split_dump(actual_frames)
+    results: list[dict] = []
+
+    def compare(target: str, actual: dict, wanted: dict) -> None:
+        mismatches = [
+            {"field": k, "wanted": v, "actual": actual[k]} for k, v in wanted.items() if actual[k] != v
+        ]
+        results.append({"target": target, "applied": not mismatches, "mismatches": mismatches})
+
+    for label in sorted(changes.get("patches") or {}, key=parse_patch_label):
+        index = parse_patch_label(label)
+        if index not in dump.patches:
+            results.append({"target": label, "applied": None, "error": "absent ou incomplet du dump"})
+            continue
+        page = unpack_page(dump.patches[index])
+        wanted = _with_positions(page, changes["patches"][label])
+        unknown = set(wanted) - set(decode_patch(page))
+        if unknown:
+            raise CodecError(f"Champs inconnus : {', '.join(sorted(unknown))}.")
+        compare(label, decode_patch(page), wanted)
+    if changes.get("system"):
+        if dump.system is None:
+            results.append({"target": "system", "applied": None, "error": "bloc système absent"})
+        else:
+            compare("system", decode_system(dump.system), changes["system"])
+    applied = [r["target"] for r in results if r["applied"]]
+    return {
+        "applied_count": len(applied),
+        "total": len(results),
+        "not_applied": [r["target"] for r in results if r["applied"] is False],
+        "results": results,
+    }

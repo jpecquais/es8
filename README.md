@@ -6,9 +6,11 @@ et la séquence de travail.
 ## État actuel
 
 Étapes 1 et 2 terminées : dump décodé en entier (patchs et système),
-écriture vérifiée sur l'appareil. Étape 3 en cours : transformations en
-masse (`es8ctl transform`) — les trois cas d'usage cibles passent en une
-commande, testés sans matériel. Détails du format : `docs/bulk-format.md`.
+écriture vérifiée sur l'appareil. Étape 3 : transformations en masse
+(`es8ctl transform`), les trois cas d'usage cibles passent en une commande.
+Import / export `.bel` (format de l'éditeur officiel). **En cours :**
+fiabiliser l'écriture de nombreuses pages via Bluetooth MIDI (WIDI) —
+voir « Prochaine session matériel » dans `docs/bulk-format.md`.
 
 ## Installation
 
@@ -66,7 +68,7 @@ uv sync
 
 ```
 src/es8ctl/
-  cli.py          # typer : devices · capture · inspect · diff · patches · system · transform · apply · verify
+  cli.py          # typer : devices · capture · inspect · diff · patches · system · transform · apply · verify · check · export-bel · import-bel
   capture.py      # écoute MIDI, enregistrement, sidecar JSON
   diff.py         # comparaison de dumps (système, patchs bit à bit)
   layout.py       # champs empaquetés au bit ↔ JSON (mécanique commune)
@@ -75,6 +77,7 @@ src/es8ctl/
   names.py        # noms symboliques (NUM_8, BPM, L6…)
   routing.py      # chaîne de loops ↔ notation écran (V8746(3//5)21)
   transform.py    # transformations en masse → changements JSON
+  bel.py          # import / export .bel (éditeur officiel)
   apply.py        # changements JSON → pages → trames (validation, sans MIDI)
   transfer.py     # envoi MIDI vers l'ES-8 (seul module émetteur)
   codec/
@@ -136,11 +139,26 @@ vérification par re-dump.
    ```
 
    Codes de sortie : 0 succès, 2 changements ou base invalides, 3 écriture
-   interrompue (partielle).
+   interrompue (partielle). Rythme : `--interval` entre les deux messages
+   d'une page (défaut 60 ms), `--page-gap` entre deux pages (défaut 1 s).
 
 4. Re-dumper et vérifier (code 0 si conforme) :
 
    ```sh
    es8ctl capture
    es8ctl verify captures/expected_<horodatage>.syx captures/<nouveau dump>.syx
+   es8ctl check changes.json captures/<nouveau dump>.syx   # patch par patch
    ```
+
+## Format `.bel` (éditeur officiel)
+
+```sh
+es8ctl export-bel captures/<dump>.syx -o mon_es8.bel
+es8ctl import-bel fichier.bel --base captures/<dump>.syx -o changes.json
+es8ctl apply changes.json --base captures/<dump>.syx
+```
+
+Clés et ordre identiques à ceux de l'éditeur. Limites (signalées) : 10 clés
+système non localisées (`MANUAL_NUMBER1-8`, `TEMPO_HOLD`, `LINK`) ; le
+patch 99-8, dont le dernier message n'est jamais reçu, est complété par la
+seconde moitié du patch d'usine.

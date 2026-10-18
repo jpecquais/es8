@@ -15,6 +15,7 @@ from typing import Callable
 
 from .codec import (
     BULK_LAST_COUNTER,
+    SPEC_LAST_COUNTER,
     CodecError,
     is_es8_bulk_frame,
     parse_es8_bulk_frame,
@@ -95,6 +96,7 @@ def record(
     address_size: int = 4,
     auto_stop: bool = True,
     on_frame: Callable[[int, int | None], None] | None = None,
+    tail_s: float = 3.0,
 ) -> CaptureResult:
     """Écoute `port` et enregistre toutes les trames SysEx reçues.
 
@@ -102,8 +104,11 @@ def record(
     dans `ignored_count`. Chaque trame est écrite dans le `.syx` dès sa
     réception : un arrêt brutal (crash, Ctrl-C) ne perd jamais ce qui a
     déjà été reçu. Se termine sur KeyboardInterrupt (Ctrl-C), après
-    `timeout_s` secondes si fourni, ou — si `auto_stop` — à la réception de
-    la dernière trame d'un bulk dump ES-8 (compteur BULK_LAST_COUNTER).
+    `timeout_s` secondes si fourni, ou — si `auto_stop` — `tail_s` secondes
+    après la dernière trame observée d'un bulk dump (compteur
+    BULK_LAST_COUNTER = 0C 4E). La spec annonce une trame de plus (0C 4F)
+    que les captures n'ont jamais reçue : si elle arrive pendant ce délai,
+    elle est enregistrée et la capture s'arrête aussitôt.
     L'ES-8 peut marquer une pause de plusieurs minutes en cours de dump :
     aucun délai d'inactivité n'arrête donc la capture.
 
@@ -125,6 +130,7 @@ def record(
     try:
         with mido.open_input(port) as inp, syx_path.open("wb") as sink:
             deadline = None if timeout_s is None else time.monotonic() + timeout_s
+            tail_deadline = None
             while True:
                 msg = inp.poll()
                 if msg is not None:
@@ -136,11 +142,16 @@ def record(
                         counter = _bulk_counter(frame)
                         if on_frame is not None:
                             on_frame(len(frames), counter)
-                        if auto_stop and counter == BULK_LAST_COUNTER:
-                            break
+                        if auto_stop and counter is not None:
+                            if counter >= SPEC_LAST_COUNTER:
+                                break
+                            if counter == BULK_LAST_COUNTER:
+                                tail_deadline = time.monotonic() + tail_s
                     else:
                         ignored += 1
                 elif deadline is not None and time.monotonic() >= deadline:
+                    break
+                elif tail_deadline is not None and time.monotonic() >= tail_deadline:
                     break
                 else:
                     time.sleep(0.01)

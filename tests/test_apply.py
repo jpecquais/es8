@@ -30,6 +30,9 @@ def frames(path):
     return list(split_frames(path.read_bytes()))
 
 
+frames_of = frames
+
+
 def counters(fs):
     return [parse_es8_bulk_frame(f).counter for f in fs]
 
@@ -127,6 +130,24 @@ def test_send_frames_in_order(fake_midi):
 def test_send_rejects_interval_below_spec(fake_midi):
     with pytest.raises(ValueError):
         transfer.send_frames("fake-out", [], interval_s=0.01)
+    with pytest.raises(ValueError):
+        transfer.send_frames("fake-out", [], page_gap_s=0.01)
+
+
+def test_send_paces_pages(monkeypatch, fake_midi):
+    """Moitiés d'une page à `interval_s`, pause `page_gap_s` entre pages."""
+    sleeps = []
+    monkeypatch.setattr(transfer.time, "sleep", sleeps.append)
+    frames = plan_changes(frames_of(FULL), {"patches": {"0-2": {"master_bpm": 90},
+                                                        "0-3": {"master_bpm": 91},
+                                                        "0-4": {"master_bpm": 92}}}).frames
+    transfer.send_frames("fake-out", frames, interval_s=0.06, page_gap_s=0.8)
+    assert sleeps == [0.06, 0.8, 0.06, 0.8, 0.06]
+
+
+def test_send_rejects_odd_frame_count(fake_midi):
+    with pytest.raises(ValueError):
+        transfer.send_frames("fake-out", [b"\xf0\xf7"])
 
 
 def run_apply(tmp_path, *extra):
@@ -179,3 +200,28 @@ def test_cli_verify(tmp_path):
     mismatch = runner.invoke(app, ["verify", str(expected), str(FULL)])
     assert mismatch.exit_code == 1
     assert json.loads(mismatch.stdout)["match"] is False
+
+
+def test_check_changes(tmp_path):
+    from es8ctl.apply import check_changes
+
+    plan = plan_changes(frames(FULL), CHANGE)
+    expected = list(split_frames(plan.expected))
+    applied = check_changes(expected, CHANGE)
+    assert applied["applied_count"] == applied["total"] == 1
+    missing = check_changes(frames(FULL), CHANGE)
+    assert missing["not_applied"] == ["49-1"]
+    assert {m["field"] for m in missing["results"][0]["mismatches"]} == {"name", "master_bpm"}
+    chain = {"patches": {"6-2": {"loop_chain": "V8746(3//5)21"}}}
+    assert check_changes(frames(FULL), chain)["applied_count"] == 1
+
+
+def test_cli_check_exit_codes(tmp_path):
+    changes = tmp_path / "c.json"
+    changes.write_text(json.dumps(CHANGE))
+    plan = plan_changes(frames(FULL), CHANGE)
+    expected = tmp_path / "exp.syx"
+    expected.write_bytes(plan.expected)
+    runner = CliRunner()
+    assert runner.invoke(app, ["check", str(changes), str(expected)]).exit_code == 0
+    assert runner.invoke(app, ["check", str(changes), str(FULL)]).exit_code == 1
