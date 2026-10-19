@@ -13,6 +13,6 @@ es8ctl apply tap.json -b dump.syx --write -p WIDI --confirm
 es8ctl web                           # the web editor, locally
 ```
 
-Built on [es8core](../core). Part of the es8 repository; see its README.
+Built on es8core. Part of [es8](https://github.com/jpecquais/es8); the web editor is at https://jpecquais.github.io/es8/control/.
 
 > Not affiliated with Roland or BOSS.

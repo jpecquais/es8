@@ -13,6 +13,6 @@ It has no dependencies, so it also runs in the browser through Pyodide: the
 es8 web apps use it there. Install `es8core[midi]` to talk to an ES-8 from
 Python with mido.
 
-Part of the es8 repository, with the es8ctl command line and the web apps.
+Part of [es8](https://github.com/jpecquais/es8), with the es8ctl command line and the web apps.
 
 > Not affiliated with Roland or BOSS.

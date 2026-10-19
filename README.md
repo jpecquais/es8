@@ -8,6 +8,8 @@ Free, open-source tools for the BOSS ES-8 Effects Switching System:
   available as a Docker image;
 - **es8core**, the engine they share.
 
+**Open ES8 Control: https://jpecquais.github.io/es8/control/**
+
 They all decode, validate and write the ES-8 data with the same engine.
 Every write is read back from the ES-8 and checked before it counts as done.
 
@@ -28,7 +30,7 @@ silently ignores everything it receives.
 
 ## ES8 Control (web editor)
 
-Open the hosted editor (see [Hosting](#hosting)), or run it locally:
+Open the hosted editor at https://jpecquais.github.io/es8/control/, or run it locally:
 
 ```sh
 uv sync
@@ -131,14 +133,14 @@ Bluetooth, about 1 page in 60 gets lost on the first pass.
 ### Docker
 
 ```sh
-docker run --rm -v "$PWD:/work" ghcr.io/<owner>/es8-cli transform set "master_bpm=120" -b dump.syx
+docker run --rm -v "$PWD:/work" ghcr.io/jpecquais/es8-cli transform set "master_bpm=120" -b dump.syx
 ```
 
 On macOS and Windows, Docker cannot reach MIDI devices: use the image for
 work without the pedal (preparing changes, dry runs, file conversion), or
 install the CLI with uv to talk to the ES-8. On Linux, including a Raspberry
 Pi, pass the sound devices to reach the ES-8:
-`docker run --rm --device /dev/snd -v "$PWD:/work" ghcr.io/<owner>/es8-cli names -p <port>`.
+`docker run --rm --device /dev/snd -v "$PWD:/work" ghcr.io/jpecquais/es8-cli names -p <port>`.
 
 ## Hosting and releases
 
@@ -147,9 +149,9 @@ HTTPS host works. One site holds the home page and every app, so the apps
 share the MIDI permission and the last read of the ES-8:
 
 ```
-https://<owner>.github.io/<repo>/            home page
-https://<owner>.github.io/<repo>/control/    ES8 Control
-https://<owner>.github.io/<repo>/designer/   ES8 Designer (later)
+https://jpecquais.github.io/es8/            home page
+https://jpecquais.github.io/es8/control/    ES8 Control
+https://jpecquais.github.io/es8/designer/   ES8 Designer (later)
 ```
 
 ```sh
@@ -162,7 +164,7 @@ GitHub Actions workflows:
 - `pages.yml` publishes the site on every push to `main` (turn it on once in
   **Settings → Pages → Source: GitHub Actions**);
 - `release.yml` runs on a `vX.Y.Z` tag. It publishes the Docker image
-  (`ghcr.io/<owner>/es8-cli`, amd64 and arm64) and the `es8core` and `es8ctl`
+  (`ghcr.io/jpecquais/es8-cli`, amd64 and arm64) and the `es8core` and `es8ctl`
   packages on PyPI. For PyPI, add this workflow once as a trusted publisher
   for each package on pypi.org.
 

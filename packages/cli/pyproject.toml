@@ -25,6 +25,11 @@ es8ctl = "es8ctl.cli:app"
 [tool.uv.sources]
 es8core = { workspace = true }
 
+[project.urls]
+Homepage = "https://jpecquais.github.io/es8/"
+Repository = "https://github.com/jpecquais/es8"
+Issues = "https://github.com/jpecquais/es8/issues"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
