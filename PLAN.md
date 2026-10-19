@@ -24,7 +24,7 @@ Détails du format et journal des essais : `docs/bulk-format.md`.
 - **Langage : Python** (≥ 3.11).
 - **Transport : MIDI DIN via interface USB-MIDI.** *(Corrigé le 2026-10-17 :
   l'ES-8 n'a pas de port USB ; l'hypothèse initiale « USB d'abord » était
-  fausse.)* Interface validée : CME WIDI Jack (Bluetooth MIDI), lecture et
+  fausse.)* Interface validée : un adaptateur MIDI Bluetooth, lecture et
   écriture. Le MIDISPORT Uno perdait des octets et n'émettait pas.
 - **Offline avant temps réel.** Le palier offline (dump → éditer → restore) ne
   dépend d'aucun reverse-engineering. La carte d'adresses temps réel est un

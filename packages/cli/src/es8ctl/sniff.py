@@ -1,7 +1,7 @@
 """Relais MIDI enregistreur entre l'éditeur officiel et l'ES-8 (étape 4 du plan).
 
 Le Mac s'intercale : l'éditeur (Windows, via rtpMIDI / session réseau) parle
-au port `editor`, l'ES-8 est sur le port `device` (WIDI). Chaque message est
+au port `editor`, l'ES-8 est sur le port `device`. Chaque message est
 retransmis tel quel dans l'autre sens et journalisé (JSON Lines, une ligne
 par message, écrite et vidée aussitôt : rien n'est perdu sur Ctrl-C).
 
@@ -57,8 +57,9 @@ def relay(
     """Relaie et journalise jusqu'à Ctrl-C (ou `timeout_s`).
 
     `device_in_port` : port d'écoute de l'ES-8 s'il diffère du port d'envoi
-    (ex. envoi par le WIDI, réception par une interface filaire sur la MIDI
-    OUT de l'ES-8 — le WIDI répond lui-même aux requêtes d'identité).
+    (ex. envoi par une interface Bluetooth, réception par une interface filaire
+    sur la MIDI OUT de l'ES-8 — certaines interfaces Bluetooth répondent
+    elles-mêmes aux requêtes d'identité).
 
     `drop_echo` : en « MIDI Out Mode : THRU », l'ES-8 renvoie ce qu'il reçoit
     sur sa MIDI OUT ; l'éditeur, voyant revenir ses propres messages, échoue

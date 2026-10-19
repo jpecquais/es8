@@ -527,7 +527,7 @@ def import_bel_cmd(
 @app.command()
 def sniff(
     editor: str = typer.Option(..., "--editor", help="Port on the editor side (e.g. an rtpMIDI network session)."),
-    device: str = typer.Option(..., "--device", help="Port on the ES-8 side (e.g. WIDI Jack Bluetooth)."),
+    device: str = typer.Option(..., "--device", help="Port on the ES-8 side (name or unique prefix, see es8ctl devices)."),
     device_in: str = typer.Option(
         None, "--device-in", help="Port to listen to the ES-8, if different from --device (e.g. a wired interface)."
     ),
@@ -571,7 +571,7 @@ def sniff(
 
 @app.command()
 def names(
-    port: str = typer.Option(..., "--port", "-p", help="Output port to the ES-8 (e.g. WIDI)."),
+    port: str = typer.Option(..., "--port", "-p", help="Output port to the ES-8 (name or unique prefix, see es8ctl devices)."),
     port_in: str = typer.Option(None, "--port-in", help="Port to listen to the ES-8, if different from --port."),
 ) -> None:
     """Read the 800 patch names (≈ 7 s) without reading the patches themselves.
@@ -598,7 +598,7 @@ def names(
 
 @app.command()
 def read(
-    port: str = typer.Option(..., "--port", "-p", help="Output port to the ES-8 (e.g. WIDI)."),
+    port: str = typer.Option(..., "--port", "-p", help="Output port to the ES-8 (name or unique prefix, see es8ctl devices)."),
     port_in: str = typer.Option(None, "--port-in", help="Port to listen to the ES-8, if different from --port."),
     patches: str = typer.Option("all", "--patches", help="Patches to read: all, none, 0-1..9-8, 0-1,2-3."),
     system: bool = typer.Option(True, "--system/--no-system", help="Also read the system block."),
@@ -729,7 +729,7 @@ def _run_live(op, port: str, port_in: str | None, write: bool, backup_dir: Path)
         raise typer.Exit(code=1)
 
 
-_PORT = typer.Option(None, "--port", "-p", help="Port to the ES-8 (e.g. WIDI Jack Bluetooth).")
+_PORT = typer.Option(None, "--port", "-p", help="Port to the ES-8 (name or unique prefix, see es8ctl devices).")
 _PORT_IN = typer.Option(None, "--port-in", help="Input port, if different from --port.")
 _WRITE = typer.Option(False, "--write", help="Run it (otherwise a dry run).")
 _BACKUPS = typer.Option(Path("backups"), "--backup-dir", help="Backup directory.")

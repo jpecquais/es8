@@ -102,7 +102,7 @@ deux messages**. Des données incohérentes peuvent faire dysfonctionner l'ES-8.
 
 ### Premier essai d'écriture (2026-10-18)
 
-Via un CME WIDI Jack (Bluetooth MIDI) branché sur l'ES-8 : une seule page
+Via un adaptateur MIDI Bluetooth branché sur l'ES-8 : une seule page
 (patch 49-1, nom + BPM) envoyée par `es8ctl apply --write` est acceptée et
 enregistrée. L'ES-8 accepte donc une page isolée, sans dump complet. Via le
 MIDISPORT Uno, rien n'atteignait l'ES-8, pas même un Program Change.
@@ -111,7 +111,7 @@ MIDISPORT Uno, rien n'atteignait l'ES-8, pas même un Program Change.
 
 **L'ES-8 ignore tout bulk dump reçu tant qu'il est sur l'écran Utility >
 Bulk Dump**, où il reste après un dump déclenché au panneau. Aucune erreur
-n'est signalée. Tous les échecs d'écriture via le WIDI s'expliquent ainsi :
+n'est signalée. Tous les échecs d'écriture via Bluetooth s'expliquent ainsi :
 
 | Envoi | État de l'ES-8 | Résultat (vérifié par dump) |
 |---|---|---|
@@ -125,14 +125,14 @@ n'est signalée. Tous les échecs d'écriture via le WIDI s'expliquent ainsi :
 | **44 pages, pause 0,5 s** | **écran de jeu (EXIT à la main)** | **✅** |
 
 Rythme retenu : 60 ms entre les deux moitiés d'une page, **0,25 s entre
-pages** (mesuré via WIDI avec `--confirm` : 0,5 s → ~1,7 % de pages perdues au
+pages** (mesuré via Bluetooth avec `--confirm` : 0,5 s → ~1,7 % de pages perdues au
 premier passage sur 800 ; 0,25 s → 0 / 40 ; 0,1 s → 4 / 40, rattrapées au
 second tour). La lecture complète reste ~2 min 20 : l'ES-8 émet ~11 messages/s,
 quelle que soit la taille des requêtes (blocs de 8, 50 ou 200 patchs mesurés).
 
-Le WIDI répond lui-même à la requête d'identité universelle
+L'adaptateur Bluetooth répond lui-même à la requête d'identité universelle
 (`F0 7E 7F 06 02 00 20 63 …`, CME) : c'est un test de la liaison Bluetooth
-(Mac ↔ WIDI), pas de la prise DIN ni de l'ES-8. Les premiers essais RQ1
+(Mac ↔ adaptateur), pas de la prise DIN ni de l'ES-8. Les premiers essais RQ1
 semblaient sans réponse : ils avaient été faits sur l'écran Bulk Dump.
 
 ### Transformations en masse sur l'appareil (2026-10-18)
@@ -144,7 +144,7 @@ semblaient sans réponse : ils avaient été faits sur l'écran Bulk Dump.
 | Échange des loops 6 ↔ 7 partout | 800 | 785 | 800 / 800 (`--confirm`, 2 tours) |
 
 Chaque résultat vérifié par une relecture complète (`es8ctl read`) identique
-au dump attendu. Perte typique via WIDI : 1,6–1,9 % des pages au premier
+au dump attendu. Perte typique via Bluetooth : 1,6–1,9 % des pages au premier
 passage, à 0,5 s entre pages.
 
 ### Protocole de l'éditeur officiel (lu dans son code, vérifié sur l'appareil)
@@ -157,14 +157,14 @@ sont lisibles.
   demande les messages de bulk ID … ID + n ; l'ES-8 répond au format exact
   du bulk dump. Bloc système : toute requête le rend depuis 0, borne de fin
   exclue → le lire avec 0..16. Lecture complète vérifiée : 1616 trames en
-  2 min 18 via WIDI, identiques au dump panneau. `es8ctl read`.
+  2 min 18 via Bluetooth, identiques au dump panneau. `es8ctl read`.
 - **Commandes DT1 `7F xx`** (données sur 2 octets) : `7F50` mode éditeur
   (0001 / 0000), `7F01` changer de patch, `7F03` mode d'affichage, `7F21`
   initialiser, `7F22` copier, `7F23` échanger (source via `7F60`), `7F24`
   renommer (caractères via `7F70`…`7F7F`).
 - **Identité** : réponse `F0 7E 00 06 02 41 14 03 00 00 00 4D 00 00 F7`
-  (famille 14 03). Le WIDI répond lui-même à cette requête et masque celle de
-  l'ES-8 : c'est ce qui fait échouer l'éditeur via WIDI. En « MIDI Out
+  (famille 14 03). L'adaptateur Bluetooth répond lui-même à cette requête et masque celle de
+  l'ES-8 : c'est ce qui fait échouer l'éditeur officiel via cet adaptateur. En « MIDI Out
   Mode : THRU », l'ES-8 renvoie aussi en écho les messages Roland reçus.
 
 **Carte des champs** : la base `prmdb` de l'éditeur (125 paramètres)

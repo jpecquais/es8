@@ -7,12 +7,12 @@ MIDI), et les messages d'**édition en temps réel**.
 ## Principe : le Mac sert d'intermédiaire
 
 ```
-Éditeur (Windows) ──rtpMIDI (réseau)──▶ Mac ──WIDI (Bluetooth)──▶ ES-8
+Éditeur (Windows) ──rtpMIDI (réseau)──▶ Mac ──interface MIDI (filaire ou Bluetooth)──▶ ES-8
                    ◀──────────────────     ◀──────────────────
                          es8ctl sniff : relaie et journalise tout
 ```
 
-Avantages : pas de WIDI ni de pilote Bluetooth à installer sous Windows
+Avantages : rien à installer côté MIDI sous Windows
 (Windows 10 gère mal le BLE-MIDI pour les applications classiques) ; le
 journal est écrit directement sur le Mac, dans le format que nos outils lisent.
 
@@ -24,7 +24,7 @@ journal est écrit directement sur le Mac, dans le format que nos outils lisent.
    MIDI* → double-cliquer *Réseau*.
 2. Activer la session (« Session 1 »), *Qui peut se connecter* : « Tout le
    monde » (le temps de la capture).
-3. Le WIDI reste connecté au Mac, comme d'habitude.
+3. L'interface MIDI de l'ES-8 reste connectée au Mac, comme d'habitude.
 
 ### Windows 10
 
@@ -41,7 +41,7 @@ journal est écrit directement sur le Mac, dans le format que nos outils lisent.
 Sur le Mac (l'ES-8 sur l'écran de jeu) :
 
 ```sh
-es8ctl sniff --editor "Réseau Session 1" --device "WIDI Jack Bluetooth"
+es8ctl sniff --editor "Réseau Session 1" --device "<port de l'ES-8>"
 ```
 
 Chaque message s'affiche (`→ ES-8` / `← ES-8`) et va dans

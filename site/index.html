@@ -72,7 +72,7 @@
         <h2>es8ctl</h2>
         <p>Scriptable, JSON output, made for automation and AI agents.</p>
         <pre>uv tool install es8ctl
-es8ctl names -p WIDI</pre>
+es8ctl names -p &lt;port&gt;</pre>
         <p>Or in Docker (no MIDI on macOS; on Linux, pass <code>--device /dev/snd</code>):</p>
         <pre>docker run --rm ghcr.io/jpecquais/es8-cli --help</pre>
       </article>
@@ -82,7 +82,7 @@ es8ctl names -p WIDI</pre>
       <h2>What you need</h2>
       <ul class="needs">
         <li>A BOSS ES-8 with firmware 2.x.</li>
-        <li>A MIDI link in both directions: a USB MIDI interface with two cables, or a Bluetooth adapter such as a CME WIDI Jack.</li>
+        <li>A MIDI link in both directions: a USB MIDI interface with two cables, or a Bluetooth MIDI adapter.</li>
         <li>Chrome, Edge or Opera for the web apps (Web MIDI with SysEx).</li>
         <li>The ES-8 on its play screen while editing: on the Bulk Dump screen it ignores what it receives.</li>
       </ul>

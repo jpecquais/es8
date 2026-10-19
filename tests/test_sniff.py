@@ -62,22 +62,22 @@ def test_relay_forwards_both_ways_and_logs(tmp_path, monkeypatch):
 def test_resolve_port_handles_mojibake_and_prefix():
     from es8ctl.transfer import resolve_port
 
-    ports = ["R\u221a\u00a9seau Session 1", "WIDI Jack Bluetooth"]
+    ports = ["R\u221a\u00a9seau Session 1", "BT MIDI Adapter"]
     assert resolve_port("Réseau Session 1", ports) == ports[0]
-    assert resolve_port("widi", ports) == ports[1]
-    assert resolve_port("WIDI Jack Bluetooth", ports) == ports[1]
+    assert resolve_port("bt", ports) == ports[1]
+    assert resolve_port("BT MIDI Adapter", ports) == ports[1]
     assert resolve_port("nope", ports) is None
 
 
 def test_relay_with_separate_device_input(tmp_path, monkeypatch):
     sent = {"editor": [], "device": []}
     inputs = {"ed": FakeIn([REQUEST, None, None, KeyboardInterrupt()]), "wired": FakeIn([None, REPLY]),
-              "widi": FakeIn([RuntimeError("le port WIDI ne doit pas être écouté")])}
+              "bluetooth": FakeIn([RuntimeError("le port Bluetooth ne doit pas être écouté")])}
     opened = []
     monkeypatch.setattr(mido, "open_input", lambda p: opened.append(p) or inputs[p])
     monkeypatch.setattr(mido, "open_output", lambda p: FakeOut(sent["editor" if p == "ed" else "device"]))
 
-    relay("ed", "widi", tmp_path, device_in_port="wired")
+    relay("ed", "bluetooth", tmp_path, device_in_port="wired")
 
     assert opened == ["ed", "wired"]
     assert sent["device"] == [REQUEST] and sent["editor"] == [REPLY]

@@ -36,12 +36,12 @@ it remotely.
 ## Typical loop
 
 ```sh
-es8ctl names --port WIDI                             # find patches by name (≈ 7 s)
-es8ctl read --port WIDI --patches 0-1..0-8           # current state → captures/read_*.syx
+es8ctl names --port <port>                             # find patches by name (≈ 7 s)
+es8ctl read --port <port> --patches 0-1..0-8           # current state → captures/read_*.syx
 es8ctl patches captures/<dump>.syx -p 0-8            # read
 es8ctl transform set "master_bpm=120" -b captures/<dump>.syx --patches 0-1..0-8 -o changes.json
 es8ctl apply changes.json -b captures/<dump>.syx     # dry run: read "changes"
-es8ctl apply changes.json -b captures/<dump>.syx --write --port WIDI --confirm
+es8ctl apply changes.json -b captures/<dump>.syx --write --port <port> --confirm
 # --confirm reads back and resends lost pages; "confirmed": true = stored
 es8ctl check changes.json captures/<new read>.syx    # 0 = everything applied
 ```

@@ -20,8 +20,8 @@ Every write is read back from the ES-8 and checked before it counts as done.
 
 - A BOSS ES-8 with firmware 2.x.
 - A MIDI link in **both directions** between the computer and the ES-8: a USB
-  MIDI interface with two cables, or a Bluetooth adapter such as a CME WIDI
-  Jack (the ES-8 has no USB port).
+  MIDI interface with two cables, or a Bluetooth MIDI adapter plugged into the
+  ES-8's MIDI jacks (the ES-8 has no USB port).
 - For the web editor: Chrome, Edge or Opera (Web MIDI with SysEx).
 - For the command line: Python 3.11 or later and [uv](https://docs.astral.sh/uv/).
 
@@ -94,9 +94,9 @@ es8ctl --help
 All commands print JSON and are dry runs unless you pass `--write`.
 
 ```sh
-es8ctl names -p WIDI                         # the 800 patch names (≈ 7 s)
-es8ctl read -p WIDI                          # the whole ES-8 to a .syx (≈ 2 min 20)
-es8ctl read -p WIDI --patches 0-1..0-8 --no-system
+es8ctl names -p <port>                         # the 800 patch names (≈ 7 s)
+es8ctl read -p <port>                          # the whole ES-8 to a .syx (≈ 2 min 20)
+es8ctl read -p <port> --patches 0-1..0-8 --no-system
 
 es8ctl patches captures/<dump>.syx -p 6-2    # decode patches to JSON
 es8ctl system captures/<dump>.syx            # system settings and PC map
@@ -106,13 +106,13 @@ es8ctl transform set "ctl_func[NUM_8]=BPM" -b captures/<dump>.syx -o tap.json
 es8ctl transform swap-loops 6 7 -b captures/<dump>.syx -o swap.json
 es8ctl transform variants 0-8 --into 10-1 -n 50 -b captures/<dump>.syx -o var.json
 es8ctl apply tap.json --base captures/<dump>.syx                         # dry run
-es8ctl apply tap.json --base captures/<dump>.syx --write -p WIDI --confirm
+es8ctl apply tap.json --base captures/<dump>.syx --write -p <port> --confirm
 
 # Direct commands, each checked by reading back
-es8ctl patch select 6-2 -p WIDI
-es8ctl patch rename 0-8 "MY PATCH" --write -p WIDI
-es8ctl patch copy 0-8 99-2 --write -p WIDI
-es8ctl patch exchange 0-1 0-2 --write -p WIDI
+es8ctl patch select 6-2 -p <port>
+es8ctl patch rename 0-8 "MY PATCH" --write -p <port>
+es8ctl patch copy 0-8 99-2 --write -p <port>
+es8ctl patch exchange 0-1 0-2 --write -p <port>
 
 # .bel files (librarian files of the official ES-8 Editor)
 es8ctl export-bel captures/<dump>.syx -o my_es8.bel

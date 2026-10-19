@@ -6,10 +6,10 @@ command prints JSON, which makes it easy to drive from scripts and AI agents.
 
 ```sh
 uv tool install es8ctl
-es8ctl names -p WIDI                 # the 800 patch names in ≈ 7 s
-es8ctl read -p WIDI                  # the whole ES-8 to a .syx file
+es8ctl names -p <port>                 # the 800 patch names in ≈ 7 s
+es8ctl read -p <port>                  # the whole ES-8 to a .syx file
 es8ctl transform set "ctl_func[NUM_8]=BPM" -b dump.syx -o tap.json
-es8ctl apply tap.json -b dump.syx --write -p WIDI --confirm
+es8ctl apply tap.json -b dump.syx --write -p <port> --confirm
 es8ctl web                           # the web editor, locally
 ```
 
