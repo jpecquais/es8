@@ -1039,7 +1039,7 @@ function SystemView({ s }) {
           </section>`)}
       </div>` : tab === "controllers" ? html`
         <p class="muted">Each switch takes its function from the patch, or from these System settings for every patch.</p>
-        <table class="ctl-table">
+        <div class="table-scroll"><table class="ctl-table">
           <thead><tr><th>Switch</th><th>Uses</th><th>System function</th><th>Mode</th><th>Off / on</th></tr></thead>
           <tbody>${SLOT_ORDER.map((slot) => {
             const i = N.ctl_slots.indexOf(slot);
@@ -1069,7 +1069,7 @@ function SystemView({ s }) {
               <input type="number" min="20" max="500" value=${f.exp_max[i]} disabled=${!f.exp_sw[i]} onChange=${(e) => setAt("exp_max", i, Number(e.target.value))} /> BPM</span>` : null}</td>
           </tr>`)}
           </tbody>
-        </table>` : html`<${PcMap} f=${f} set=${set} dirty=${dirty} />`}
+        </table></div>` : html`<${PcMap} f=${f} set=${set} dirty=${dirty} />`}
     </div>`;
 }
 

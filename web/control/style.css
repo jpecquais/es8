@@ -469,3 +469,24 @@ select, input:not([type]), input[type="number"], input[type="search"], textarea 
 .lcd .tempo.dirty input { border-color: var(--pending); }
 .small { font-size: 12px; }
 .pop a, .welcome a { color: var(--accent); }
+
+/* ---------------------------------------------------------------- tailles : rien ne déborde de son conteneur */
+.sw { grid-template-columns: minmax(0, 1fr); }
+.sw > * { min-width: 0; }
+.sw .tag, .sw .fn, .sw .slot { overflow-wrap: anywhere; }
+.sw .slot { flex-wrap: wrap; }
+.table-scroll { overflow-x: auto; max-width: 100%; }
+.display { flex-wrap: wrap; max-width: 100%; }
+.lcd { min-width: 0; max-width: 100%; }
+.patch > *, .library > *, .system > * { min-width: 0; }
+@media (max-width: 720px) {
+  .patch, .library, .system { padding: 14px 12px 32px; }
+  .seg { font-size: 30px; }
+  .lcd { grid-template-columns: minmax(0, 1fr); }
+  .lcd .p-name { font-size: 26px; width: calc(16ch + 16 * 0.04em + 16px); max-width: 100%; }
+  .lcd .tempo, .lcd .tempo input { font-size: 24px; }
+  .two { grid-template-columns: minmax(0, 1fr); }
+  .sys { grid-template-columns: minmax(0, 1fr); }
+  .selbar { position: static; }
+}
+.lcd .tempo input { width: calc(3ch + 10px); }
