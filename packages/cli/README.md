@@ -15,4 +15,6 @@ es8ctl web                           # the web editor, locally
 
 Built on es8core. Part of [es8](https://github.com/jpecquais/es8); the web editor is at https://jpecquais.github.io/es8/control/.
 
+License: AGPL-3.0-or-later.
+
 > Not affiliated with Roland or BOSS.

@@ -223,6 +223,8 @@ function Connection({ s }) {
             }}>Export .bel</button>
           </div>
         </div>
+        <p class="muted small">ES8 Control is free software under the AGPL-3.0.
+          <a href="https://github.com/jpecquais/es8" target="_blank" rel="noopener">Source code</a></p>
         <div class="backups">
           <b>Automatic backups</b>
           <small class="muted">Taken before every write and kept in this browser (last 5).</small>
@@ -251,6 +253,8 @@ function Welcome({ s }) {
           onChange=${(e) => e.target.files[0] && E.openFile(e.target.files[0])} /></label>
       </div>
       ${!device ? html`<p class="muted">${s.midi === "ok" ? "No MIDI port selected." : "Web MIDI is not available here: only .syx files can be opened."}</p>` : null}
+      <p class="muted small">Free software under the AGPL-3.0 ·
+        <a href="https://github.com/jpecquais/es8" target="_blank" rel="noopener">source code</a></p>
     </div>`;
 }
 

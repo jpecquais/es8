@@ -15,4 +15,6 @@ Python with mido.
 
 Part of [es8](https://github.com/jpecquais/es8), with the es8ctl command line and the web apps.
 
+License: AGPL-3.0-or-later.
+
 > Not affiliated with Roland or BOSS.

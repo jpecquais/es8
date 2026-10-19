@@ -9,6 +9,7 @@ license-files = ["LICENSE"]
 keywords = ["boss", "es-8", "midi", "sysex", "loop switcher", "cli"]
 classifiers = [
     "Development Status :: 4 - Beta",
+    "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
     "Environment :: Console",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",

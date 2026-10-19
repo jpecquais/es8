@@ -219,5 +219,8 @@ This includes simulated interrupted writes (`tests/test_interrupted_write.py`).
 
 ## License
 
-AGPL-3.0-or-later, see `LICENSE`. The web apps bundle Preact (MIT) and htm (Apache-2.0),
-and load Pyodide (MPL-2.0) from its CDN.
+GNU Affero General Public License v3.0 or later (AGPL-3.0-or-later), see
+`LICENSE`. Any project that uses or modifies this code must be published
+under the same license, including a modified web app that is only hosted
+online. The web apps bundle Preact (MIT) and htm (Apache-2.0), and load
+Pyodide (MPL-2.0) from its CDN.

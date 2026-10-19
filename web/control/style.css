@@ -467,3 +467,5 @@ select, input:not([type]), input[type="number"], input[type="search"], textarea 
 .lcd .tempo input::-webkit-inner-spin-button { display: none; }
 .lcd .tempo input:hover, .lcd .tempo input:focus { border-color: rgba(223, 233, 255, 0.35); }
 .lcd .tempo.dirty input { border-color: var(--pending); }
+.small { font-size: 12px; }
+.pop a, .welcome a { color: var(--accent); }
