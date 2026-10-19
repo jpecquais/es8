@@ -25,6 +25,8 @@ const SOURCE_SLOT = {
 const LABELS = Array.from({ length: 800 }, (_, i) => `${Math.floor(i / 8)}-${(i % 8) + 1}`);
 
 const pad16 = (s) => s.slice(0, 16).padEnd(16);
+// Numéro comme sur l'afficheur de l'ES-8 : « 6-3 » → « 06.3 ».
+const segNumber = (label) => { const [b, n] = label.split("-"); return `${b.padStart(2, "0")}.${n}`; };
 const bankOf = (label) => Number(label.split("-")[0]);
 const indexOf = (label) => LABELS.indexOf(label);
 const labelsOfBank = (b) => [1, 2, 3, 4, 5, 6, 7, 8].map((n) => `${b}-${n}`);
@@ -360,12 +362,15 @@ function PatchView({ s, D, sel }) {
   return html`
     <div class="patch">
       <div class="p-head">
-        <span class="num">${sel}</span>
-        <input class="p-name ${dirty("name") ? "dirty" : ""}" maxlength="16" value=${f.name.trimEnd()} spellcheck="false"
-          aria-label="Patch name" onChange=${(e) => stage({ name: pad16(e.target.value) })} />
-        <label class="mini ${dirty("master_bpm") ? "dirty" : ""}">Tempo
-          <input type="number" min=${bpmRange[0]} max=${bpmRange[1]} value=${f.master_bpm}
-            onChange=${(e) => stage({ master_bpm: Number(e.target.value) })} /></label>
+        <div class="display" title=${`Patch ${sel}`}>
+          <span class="seg" aria-label=${`Patch ${sel}`}>${segNumber(sel)}</span>
+          <div class="lcd">
+            <input class="p-name ${dirty("name") ? "dirty" : ""}" maxlength="16" value=${f.name.trimEnd()} spellcheck="false"
+              aria-label="Patch name" onChange=${(e) => stage({ name: pad16(e.target.value) })} />
+            <label class="tempo ${dirty("master_bpm") ? "dirty" : ""}" title="Tempo (BPM)">♩=<input type="number" min=${bpmRange[0]} max=${bpmRange[1]}
+              value=${f.master_bpm} aria-label="Tempo in BPM" onChange=${(e) => stage({ master_bpm: Number(e.target.value) })} /></label>
+          </div>
+        </div>
         <span class="grow"></span>
         <span class="fresh">
           ${s.grid.current === sel ? html`<span class="badge">active on the ES-8</span>`
@@ -619,7 +624,7 @@ function Board({ d, f, N, D, setAt, stage, dirty, openSw, setOpenSw, setOpenAssi
 
   return html`
     <section class="sect">
-      <div class="sect-h"><h4>Footswitches</h4><span class="hint">Orange dot: differs from the factory setting · click to edit</span></div>
+      <div class="sect-h"><h4>Footswitches</h4><span class="hint">Blue dot: differs from the factory setting · click to edit</span></div>
       <div class="board">
         <span class="sep">Switches</span>
         ${BOARD.flat().map(card)}
