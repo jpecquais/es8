@@ -1,4 +1,6 @@
-// Moteur de l'interface : Pyodide (bibliothèque es8ctl), Web MIDI, stockage.
+// Commun aux applis web : Pyodide (moteur es8core), Web MIDI, stockage.
+// Les applis sont servies depuis la même origine : autorisation MIDI, cache de
+// l'ES-8 et sauvegardes sont partagés entre elles.
 // Aucune logique ES-8 ici : lecture, décodage, validation et écriture sont
 // faits par le code Python du CLI, exécuté dans le navigateur.
 // Textes affichés : en anglais.
@@ -71,10 +73,10 @@ export function refresh() {
 export async function boot() {
   try {
     const pyodide = await loadPyodide({ indexURL: PYODIDE_URL });
-    const archive = await (await fetch("es8ctl.zip")).arrayBuffer();
+    const archive = await (await fetch(new URL("es8core.zip", import.meta.url))).arrayBuffer();
     pyodide.unpackArchive(archive, "zip", { extractDir: LIB_DIR });
     pyodide.runPython(`import sys; sys.path.insert(0, "${LIB_DIR}")`);
-    bridge = pyodide.pyimport("es8ctl.webapp");
+    bridge = pyodide.pyimport("es8core.webapp");
     store.set({ ready: true, names: call("names") });
     restoreCache();
   } catch (err) {

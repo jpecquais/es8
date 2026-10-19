@@ -18,9 +18,9 @@ from __future__ import annotations
 import time
 from typing import Callable
 
-from .apply import DEFAULT_INTERVAL_S, DEFAULT_PAGE_GAP_S
+from es8core.apply import DEFAULT_INTERVAL_S, DEFAULT_PAGE_GAP_S
 
-from .session import MIN_INTERVAL_S  # noqa: F401  (spec Roland, réexporté)
+from es8core.session import MIN_INTERVAL_S  # noqa: F401  (spec Roland, réexporté)
 
 
 def list_output_ports() -> list[str]:
@@ -46,7 +46,7 @@ def send_frames(
 
     import mido
 
-    from .session import MidoTransport, send_frames_async
+    from es8core.session import MidoTransport, send_frames_async
 
     async def pause(seconds: float) -> None:
         time.sleep(seconds)  # synchrone : rythme exact, et remplaçable en test

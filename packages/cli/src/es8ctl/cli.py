@@ -7,6 +7,7 @@ après validation complète et sauvegarde horodatée du dump de base.
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import sys
 from datetime import UTC, datetime
@@ -15,14 +16,14 @@ from pathlib import Path
 import typer
 
 from .capture import CaptureResult, inspect_file, list_ports, record
-from .codec import BULK_LAST_COUNTER, CodecError, parse_patch_label, patch_label, unpack_page
-from .diff import diff_files, load_dump
-from .patch import FIRMWARE, SCHEMA_VERSION, decode_patch, out_of_range
-from .system import decode_system, system_out_of_range
-from .apply import DEFAULT_INTERVAL_S, DEFAULT_PAGE_GAP_S, DEVICE_PRECONDITION, check_changes, plan_changes
-from . import transform as tf
-from .routing import render as render_chain
-from .codec import split_frames
+from es8core.codec import BULK_LAST_COUNTER, CodecError, parse_patch_label, patch_label, unpack_page
+from es8core.diff import diff_files, load_dump
+from es8core.patch import FIRMWARE, SCHEMA_VERSION, decode_patch, out_of_range
+from es8core.system import decode_system, system_out_of_range
+from es8core.apply import DEFAULT_INTERVAL_S, DEFAULT_PAGE_GAP_S, DEVICE_PRECONDITION, check_changes, plan_changes
+from es8core import transform as tf
+from es8core.routing import render as render_chain
+from es8core.codec import split_frames
 
 app = typer.Typer(
     add_completion=False,
@@ -415,7 +416,7 @@ def apply(
 
     import mido
 
-    from .session import MidoTransport, write_confirmed_async
+    from es8core.session import MidoTransport, write_confirmed_async
 
     listen = resolve_port(port_in or port, list_ports())
     if listen is None:
@@ -493,8 +494,8 @@ def export_bel_cmd(
     out: Path = typer.Option(..., "--out", "-o", help=".bel file to write."),
 ) -> None:
     """Export a dump as a .bel file (official BOSS editor librarian format)."""
-    from .bel import export_bel
-    from .codec import frames_by_counter
+    from es8core.bel import export_bel
+    from es8core.codec import frames_by_counter
 
     try:
         frames = list(split_frames(syx.read_bytes()))
@@ -512,7 +513,7 @@ def import_bel_cmd(
     out: Path = typer.Option(None, "--out", "-o", help="Changes JSON (otherwise stdout)."),
 ) -> None:
     """Turn a .bel file into changes JSON for `es8ctl apply` (differences with the base)."""
-    from .bel import import_bel
+    from es8core.bel import import_bel
 
     try:
         changes, warnings = import_bel(json.loads(bel.read_text(encoding="utf-8")), load_dump(base))
@@ -577,8 +578,8 @@ def names(
 
     Output: {"0-1": "NAME", …}. Exit 0 if all 800 names were read, 1 if not, 2 on error.
     """
-    from .codec import PATCH_COUNT
-    from .request import read_names
+    from es8core.codec import PATCH_COUNT
+    from es8core.request import read_names
     from .transfer import list_output_ports, resolve_port
 
     outputs, inputs = list_output_ports(), list_ports()
@@ -608,8 +609,8 @@ def read(
 
     Exit 0 if everything was read, 1 if pages are still missing after retries, 2 on error.
     """
-    from .codec import PATCH_COUNT
-    from .request import frames_to_syx, patch_page, read_pages
+    from es8core.codec import PATCH_COUNT
+    from es8core.request import frames_to_syx, patch_page, read_pages
     from .transfer import list_output_ports, resolve_port
 
     outputs, inputs = list_output_ports(), list_ports()
@@ -623,7 +624,7 @@ def read(
         indices = list(range(PATCH_COUNT))
     else:
         try:
-            from .codec import parse_patch_label
+            from es8core.codec import parse_patch_label
 
             indices = sorted({i for part in patches.split(",") for i in (
                 range(parse_patch_label(part.split("..")[0].strip()),
@@ -665,12 +666,12 @@ def _run_live(op, port: str, port_in: str | None, write: bool, backup_dir: Path)
 
     import mido
 
-    from .codec import patch_label as label_of
-    from .codec import split_dump
-    from .live import expected_after
-    from .patch import decode_patch
-    from .request import frames_to_syx, patch_page, read_pages
-    from .system import decode_system
+    from es8core.codec import patch_label as label_of
+    from es8core.codec import split_dump
+    from es8core.live import expected_after
+    from es8core.patch import decode_patch
+    from es8core.request import frames_to_syx, patch_page, read_pages
+    from es8core.system import decode_system
     from .transfer import list_output_ports, resolve_port
 
     report = op.describe()
@@ -735,7 +736,7 @@ _BACKUPS = typer.Option(Path("backups"), "--backup-dir", help="Backup directory.
 
 
 def _live(build, *args, port, port_in, write, backup_dir) -> None:
-    from . import live
+    from es8core import live
 
     try:
         op = getattr(live, build)(*args)
@@ -783,17 +784,32 @@ def patch_init(patch: str = typer.Argument(...), port: str = _PORT, port_in: str
 
 
 def library_zip() -> bytes:
-    """La bibliothèque es8ctl (sources .py) en zip, pour Pyodide dans le navigateur."""
+    """Le moteur es8core (sources .py) en zip, pour Pyodide dans le navigateur."""
     import io
     import zipfile
 
-    root = Path(__file__).resolve().parent
+    import es8core
+
+    root = Path(es8core.__file__).resolve().parent
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
         for path in sorted(root.rglob("*.py")):
             if "__pycache__" not in path.parts:
-                archive.write(path, Path("es8ctl") / path.relative_to(root))
+                archive.write(path, Path("es8core") / path.relative_to(root))
     return buffer.getvalue()
+
+
+def _web_roots() -> dict[str, Path]:
+    """Dossiers du site : applis (web/) et accueil (site/), installés ou dans le dépôt."""
+    here = Path(__file__).resolve().parent
+    for base in (here, here.parents[3]):  # paquet installé, puis dépôt (packages/cli/src/es8ctl)
+        web, site = base / "web", base / "site"
+        if (web / "shared" / "engine.js").is_file():
+            return {"web": web, "site": site}
+    raise FileNotFoundError("Web apps not found (web/shared/engine.js).")
+
+
+ZIP_PATH = "shared/es8core.zip"
 
 
 @app.command()
@@ -801,25 +817,31 @@ def web(
     port: int = typer.Option(8765, "--port", help="Local HTTP port."),
     open_browser: bool = typer.Option(True, "--open/--no-open", help="Open the browser."),
 ) -> None:
-    """Run the web editor locally (Chrome / Edge: Web MIDI). Ctrl-C to stop."""
+    """Run the web apps locally (Chrome / Edge: Web MIDI). Ctrl-C to stop."""
     import functools
     import http.server
     import webbrowser
 
-    web_dir = Path(__file__).resolve().parent / "web"
+    roots = _web_roots()
     archive = library_zip()
 
     class Handler(http.server.SimpleHTTPRequestHandler):
         def do_GET(self):  # noqa: N802 (API http.server)
-            if self.path.split("?")[0] == "/es8ctl.zip":
+            if self.path.split("?")[0] == "/" + ZIP_PATH:
                 self.send_response(200)
                 self.send_header("Content-Type", "application/zip")
                 self.send_header("Content-Length", str(len(archive)))
-                self.send_header("Cache-Control", "no-store")
                 self.end_headers()
                 self.wfile.write(archive)
                 return
             super().do_GET()
+
+        def translate_path(self, path):
+            # /control/…, /shared/… → web/ ; le reste (accueil) → site/
+            clean = path.split("?")[0].lstrip("/")
+            first = clean.split("/")[0]
+            base = roots["web"] if (roots["web"] / first).is_dir() and first else roots["site"]
+            return str(base / clean)
 
         def end_headers(self):
             self.send_header("Cache-Control", "no-store")
@@ -828,9 +850,9 @@ def web(
         def log_message(self, *args):
             pass
 
-    handler = functools.partial(Handler, directory=str(web_dir))
+    handler = functools.partial(Handler, directory=str(roots["site"]))
     server = http.server.ThreadingHTTPServer(("127.0.0.1", port), handler)
-    url = f"http://localhost:{port}/"
+    url = f"http://localhost:{port}/control/"
     typer.echo(f"Web editor: {url}  (Chrome or Edge; Ctrl-C to stop)", err=True)
     if open_browser:
         webbrowser.open(url)
@@ -846,18 +868,22 @@ def web(
 def build_web(
     out: Path = typer.Option(Path("dist/site"), "--out", "-o", help="Directory of the site to build."),
 ) -> None:
-    """Build the web editor as a static site (GitHub Pages or any HTTPS host).
+    """Build the web apps and the home page as a static site (GitHub Pages or any HTTPS host).
 
     Everything runs in the browser: the site needs no application server.
     Web MIDI requires HTTPS (or localhost).
     """
-    import shutil
-
-    web_dir = Path(__file__).resolve().parent / "web"
+    roots = _web_roots()
     if out.exists():
         shutil.rmtree(out)
-    shutil.copytree(web_dir, out)
-    (out / "es8ctl.zip").write_bytes(library_zip())
+    shutil.copytree(roots["site"], out)
+    for app_dir in sorted(p for p in roots["web"].iterdir() if p.is_dir()):
+        shutil.copytree(app_dir, out / app_dir.name, ignore=shutil.ignore_patterns("__pycache__", ".DS_Store"))
+    (out / ZIP_PATH).write_bytes(library_zip())
+    owner = os.environ.get("GITHUB_REPOSITORY_OWNER")
+    if owner:  # publication GitHub : l'adresse de l'image Docker est connue
+        home = out / "index.html"
+        home.write_text(home.read_text(encoding="utf-8").replace("&lt;owner&gt;", owner.lower()), encoding="utf-8")
     (out / ".nojekyll").write_text("")  # GitHub Pages : servir les fichiers tels quels
     _print_json({"site": str(out), "files": sorted(str(p.relative_to(out)) for p in out.rglob("*") if p.is_file())})
 

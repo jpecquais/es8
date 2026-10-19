@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from es8ctl.codec import (
+from es8core.codec import (
     BULK_DATA_LEN,
     BULK_LAST_COUNTER,
     PATCH_FIRST_COUNTER,

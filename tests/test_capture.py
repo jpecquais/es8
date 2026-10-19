@@ -9,7 +9,7 @@ import json
 import mido
 
 from es8ctl.capture import record
-from es8ctl.codec import (
+from es8core.codec import (
     BULK_DATA_LEN,
     BULK_LAST_COUNTER,
     build_es8_bulk_frame,

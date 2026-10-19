@@ -5,9 +5,9 @@ from pathlib import Path
 
 import pytest
 
-from es8ctl.codec import CodecError, parse_patch_label, patch_label, unpack_page
-from es8ctl.diff import load_dump
-from es8ctl.patch import (
+from es8core.codec import CodecError, parse_patch_label, patch_label, unpack_page
+from es8core.diff import load_dump
+from es8core.patch import (
     FIELDS_BY_NAME,
     PATCH_BITS_USED,
     PATCH_FIELDS,

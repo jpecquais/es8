@@ -4,9 +4,9 @@ import asyncio
 import json
 from pathlib import Path
 
-from es8ctl import webapp
+from es8core import webapp
 from es8ctl.cli import library_zip
-from es8ctl.codec import parse_es8_bulk_frame, split_frames
+from es8core.codec import parse_es8_bulk_frame, split_frames
 
 FIXTURE = Path(__file__).parent / "fixtures" / "es8_bulk_session2_name_A.syx"
 
@@ -52,7 +52,8 @@ def test_library_zip_has_browser_modules():
 
     names = zipfile.ZipFile(io.BytesIO(library_zip())).namelist()
     for module in ("webapp", "session", "request", "patch", "system", "routing", "codec/es8"):
-        assert f"es8ctl/{module}.py" in names
+        assert f"es8core/{module}.py" in names
+    assert not any(n.startswith("es8ctl/") for n in names)  # le navigateur n'a que le moteur
 
 
 class StatefulES8:
@@ -101,7 +102,7 @@ def test_staging_validates_and_previews():
 
 
 def test_write_pending_confirms_and_resends(monkeypatch):
-    import es8ctl.apply as apply_mod
+    import es8core.apply as apply_mod
 
     monkeypatch.setattr(apply_mod, "DEFAULT_PAGE_GAP_S", 0.05)
     loop = asyncio.new_event_loop()
@@ -124,8 +125,8 @@ def test_write_pending_confirms_and_resends(monkeypatch):
 def test_write_rebases_on_device_changes(monkeypatch):
     """L'appareil a changé (au panneau) depuis la lecture : la modification en
     attente s'applique sur la version fraîche, sans écraser ce changement."""
-    import es8ctl.apply as apply_mod
-    from es8ctl.apply import plan_changes
+    import es8core.apply as apply_mod
+    from es8core.apply import plan_changes
 
     monkeypatch.setattr(apply_mod, "DEFAULT_PAGE_GAP_S", 0.05)
     loop = asyncio.new_event_loop()
@@ -213,7 +214,7 @@ def test_labels_and_system_detail():
 
 
 def _namelist_messages(names: list[str]) -> list[bytes]:
-    from es8ctl.codec.roland import checksum
+    from es8core.codec.roland import checksum
 
     out = []
     for m in range(100):
@@ -223,7 +224,7 @@ def _namelist_messages(names: list[str]) -> list[bytes]:
 
 
 def test_read_names_fills_the_list_before_patches():
-    from es8ctl.request import parse_namelist_message
+    from es8core.request import parse_namelist_message
 
     names = [f"SONG {i}" for i in range(800)]
     msgs = _namelist_messages(names)
@@ -252,12 +253,12 @@ def test_read_names_fills_the_list_before_patches():
 
 
 def test_import_export_factory_and_variants():
-    from es8ctl.factory import factory_fields
+    from es8core.factory import factory_fields
 
     webapp.load_syx(FIXTURE.read_bytes())
     webapp.discard()
     # Un .syx dont un patch diffère revient comme modification en attente.
-    from es8ctl.apply import plan_changes
+    from es8core.apply import plan_changes
 
     edited = plan_changes(list(split_frames(FIXTURE.read_bytes())), {"patches": {"0-8": {"master_bpm": 77}}}).expected
     assert len(bytes(webapp.syx_bytes(json.dumps(["0-8", "system"])))) == 18 * 155
@@ -282,6 +283,7 @@ def test_build_web_produces_a_static_site(tmp_path):
 
     result = CliRunner().invoke(app, ["build-web", "--out", str(tmp_path / "site")])
     assert result.exit_code == 0, result.output
-    for name in ("index.html", "app.js", "engine.js", "chain.js", "describe.js", "style.css",
-                 "vendor/preact-htm.module.js", "es8ctl.zip", ".nojekyll"):
+    for name in ("index.html", "control/index.html", "control/app.js", "control/style.css", "shared/engine.js",
+                 "shared/chain.js", "shared/describe.js", "shared/vendor/preact-htm.module.js",
+                 "shared/es8core.zip", ".nojekyll"):
         assert (tmp_path / "site" / name).is_file()

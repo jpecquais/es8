@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from es8ctl.capture import inspect_file
-from es8ctl.codec import (
+from es8core.codec import (
     BULK_DATA_LEN,
     PATCH_DATA_LEN,
     CodecError,
@@ -25,8 +25,8 @@ from es8ctl.codec import (
     unpack_7to8,
     unpack_page,
 )
-from es8ctl.codec.es8 import PATCH_NAME_BIT, PATCH_NAME_CHAR_BITS, PATCH_NAME_LEN
-from es8ctl.diff import diff_files, load_dump
+from es8core.codec.es8 import PATCH_NAME_BIT, PATCH_NAME_CHAR_BITS, PATCH_NAME_LEN
+from es8core.diff import diff_files, load_dump
 
 FIXTURES = Path(__file__).parent / "fixtures"
 SESSION1 = FIXTURES / "es8_bulk_session1.syx"

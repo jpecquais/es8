@@ -4,12 +4,12 @@ from pathlib import Path
 
 import pytest
 
-from es8ctl.apply import plan_changes
-from es8ctl.codec import CodecError, parse_patch_label, split_frames, unpack_page
-from es8ctl.diff import load_dump
-from es8ctl.patch import decode_patch
-from es8ctl.routing import parse, render, swap_loops, with_chain
-from es8ctl.transform import op_variants
+from es8core.apply import plan_changes
+from es8core.codec import CodecError, parse_patch_label, split_frames, unpack_page
+from es8core.diff import load_dump
+from es8core.patch import decode_patch
+from es8core.routing import parse, render, swap_loops, with_chain
+from es8core.transform import op_variants
 
 FIXTURE = Path(__file__).parent / "fixtures" / "es8_bulk_session2_name_A.syx"
 FACTORY = [8, 7, 6, 5, 4, 3, 2, 1, 0, 9, 10, 11, 12, 10, 11, 12, 13, 14, 15, 13, 14, 15]
@@ -128,7 +128,7 @@ def test_variants_rejects(dump, kwargs):
 
 
 def test_hardware_constraints():
-    from es8ctl.routing import mixers_used, problems
+    from es8core.routing import mixers_used, problems
 
     none = [0] * 9
     assert problems(parse("V8746(3//5)21"), none) == []
@@ -146,8 +146,8 @@ def test_hardware_constraints():
 def test_plan_refuses_impossible_routing():
     import pytest
 
-    from es8ctl.apply import plan_changes
-    from es8ctl.codec import CodecError, split_frames
+    from es8core.apply import plan_changes
+    from es8core.codec import CodecError, split_frames
 
     frames = list(split_frames((Path(__file__).parent / "fixtures" / "es8_bulk_session2_name_A.syx").read_bytes()))
     with pytest.raises(CodecError, match="SEPARATE"):

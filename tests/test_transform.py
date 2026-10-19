@@ -6,12 +6,12 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from es8ctl.apply import plan_changes
+from es8core.apply import plan_changes
 from es8ctl.cli import app
-from es8ctl.codec import CodecError, parse_patch_label, split_frames, unpack_page
-from es8ctl.diff import load_dump
-from es8ctl.patch import decode_patch
-from es8ctl.transform import op_set, op_swap_loops, parse_assignment, select_patches
+from es8core.codec import CodecError, parse_patch_label, split_frames, unpack_page
+from es8core.diff import load_dump
+from es8core.patch import decode_patch
+from es8core.transform import op_set, op_swap_loops, parse_assignment, select_patches
 
 FIXTURE = Path(__file__).parent / "fixtures" / "es8_bulk_session2_name_A.syx"
 

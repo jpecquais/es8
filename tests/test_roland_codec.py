@@ -8,7 +8,7 @@ checksum = 128 - (0x40 + 0x00 + 0x7F + 0x00) mod 128 = 0x41
 
 import pytest
 
-from es8ctl.codec import (
+from es8core.codec import (
     CMD_DT1,
     CMD_RQ1,
     ChecksumError,

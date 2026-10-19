@@ -7,9 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from es8ctl.routing import parse
+from es8core.routing import parse
 
-CHAIN_JS = Path(__file__).parents[1] / "src" / "es8ctl" / "web" / "chain.js"
+CHAIN_JS = Path(__file__).parents[1] / "web" / "shared" / "chain.js"
 
 SCRIPT = """
 import * as c from %s;

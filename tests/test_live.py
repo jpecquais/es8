@@ -5,10 +5,10 @@ import json
 import pytest
 from typer.testing import CliRunner
 
-from es8ctl import live
+from es8core import live
 from es8ctl.cli import app
-from es8ctl.codec import CodecError
-from es8ctl.request import editor_mode_message
+from es8core.codec import CodecError
+from es8core.request import editor_mode_message
 
 ON, OFF = editor_mode_message(True), editor_mode_message(False)
 

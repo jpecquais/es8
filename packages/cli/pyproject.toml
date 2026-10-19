@@ -1,0 +1,38 @@
+[project]
+name = "es8ctl"
+version = "0.2.0"
+description = "Command line for the BOSS ES-8: read, edit in bulk and write with verification. Scriptable, JSON output."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "AGPL-3.0-or-later"
+license-files = ["LICENSE"]
+keywords = ["boss", "es-8", "midi", "sysex", "loop switcher", "cli"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Topic :: Multimedia :: Sound/Audio :: MIDI",
+]
+dependencies = [
+    "es8core[midi]==0.2.0",
+    "typer>=0.12",
+]
+
+[project.scripts]
+es8ctl = "es8ctl.cli:app"
+
+[tool.uv.sources]
+es8core = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/es8ctl"]
+
+# Les applis web sont embarquées pour que `es8ctl web` marche une fois installé.
+[tool.hatch.build.targets.wheel.force-include]
+"../../web" = "es8ctl/web"
+"../../site" = "es8ctl/site"

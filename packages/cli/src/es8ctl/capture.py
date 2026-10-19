@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Callable
 
-from .codec import (
+from es8core.codec import (
     BULK_LAST_COUNTER,
     CodecError,
     is_es8_bulk_frame,

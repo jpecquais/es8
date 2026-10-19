@@ -5,8 +5,8 @@ from pathlib import Path
 import mido
 import pytest
 
-from es8ctl.codec import parse_es8_bulk_frame, split_frames
-from es8ctl.request import (
+from es8core.codec import parse_es8_bulk_frame, split_frames
+from es8core.request import (
     editor_mode_message,
     frames_to_syx,
     patch_page,

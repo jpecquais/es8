@@ -6,11 +6,11 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from es8ctl.apply import plan_changes
-from es8ctl.bel import export_bel, import_bel
+from es8core.apply import plan_changes
+from es8core.bel import export_bel, import_bel
 from es8ctl.cli import app
-from es8ctl.codec import CodecError, frames_by_counter, split_frames
-from es8ctl.diff import load_dump
+from es8core.codec import CodecError, frames_by_counter, split_frames
+from es8core.diff import load_dump
 
 FIXTURE = Path(__file__).parent / "fixtures" / "es8_bulk_session2_name_A.syx"
 NO_SYSTEM = Path(__file__).parent / "fixtures" / "es8_bulk_session1.syx"

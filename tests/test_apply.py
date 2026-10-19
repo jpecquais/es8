@@ -8,17 +8,17 @@ import pytest
 from typer.testing import CliRunner
 
 from es8ctl import transfer
-from es8ctl.apply import plan_changes
+from es8core.apply import plan_changes
 from es8ctl.cli import app
-from es8ctl.codec import (
+from es8core.codec import (
     CodecError,
     parse_es8_bulk_frame,
     split_frames,
     unpack_page,
 )
-from es8ctl.diff import load_dump
-from es8ctl.patch import decode_patch
-from es8ctl.system import decode_system
+from es8core.diff import load_dump
+from es8core.patch import decode_patch
+from es8core.system import decode_system
 
 FIXTURES = Path(__file__).parent / "fixtures"
 FULL = FIXTURES / "es8_bulk_session2_name_A.syx"  # avec bloc système
@@ -203,7 +203,7 @@ def test_cli_verify(tmp_path):
 
 
 def test_check_changes(tmp_path):
-    from es8ctl.apply import check_changes
+    from es8core.apply import check_changes
 
     plan = plan_changes(frames(FULL), CHANGE)
     expected = list(split_frames(plan.expected))
@@ -245,8 +245,8 @@ def test_cli_verify_ignores_selected_patch(tmp_path):
 
 
 def test_pending_pages_after_readback():
-    from es8ctl.apply import pending_pages
-    from es8ctl.codec import frames_by_counter, parse_es8_bulk_frame
+    from es8core.apply import pending_pages
+    from es8core.codec import frames_by_counter, parse_es8_bulk_frame
 
     plan = plan_changes(frames(FULL), {"patches": {"0-2": {"master_bpm": 90}, "0-3": {"master_bpm": 91}}})
     written = {parse_es8_bulk_frame(f).counter: f for f in plan.frames}
@@ -260,14 +260,14 @@ def test_pending_pages_after_readback():
 
 
 def build(counter, data):
-    from es8ctl.codec import build_es8_bulk_frame
+    from es8core.codec import build_es8_bulk_frame
 
     return build_es8_bulk_frame(counter, data)
 
 
 def test_pending_pages_ignores_selected_patch_on_system():
-    from es8ctl.apply import pending_pages
-    from es8ctl.codec import parse_es8_bulk_frame
+    from es8core.apply import pending_pages
+    from es8core.codec import parse_es8_bulk_frame
 
     plan = plan_changes(frames(FULL), {"system": {"others_lcd_contrast": 7}})
     navigated = plan_changes(list(split_frames(plan.expected)), {"system": {"current_num": 392}})

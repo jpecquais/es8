@@ -13,8 +13,8 @@ from pathlib import Path
 
 import pytest
 
-from es8ctl import webapp
-from es8ctl.codec import parse_es8_bulk_frame, split_frames
+from es8core import webapp
+from es8core.codec import parse_es8_bulk_frame, split_frames
 
 FIXTURE = Path(__file__).parent / "fixtures" / "es8_bulk_session2_name_A.syx"
 TARGETS = ["0-1", "0-2", "0-3", "0-4", "0-5", "0-6"]
@@ -67,7 +67,7 @@ class FlakyES8:
 
 @pytest.fixture
 def setup(monkeypatch):
-    import es8ctl.apply as apply_mod
+    import es8core.apply as apply_mod
 
     monkeypatch.setattr(apply_mod, "DEFAULT_PAGE_GAP_S", 0.05)
     monkeypatch.setattr(webapp, "DEFAULT_IDLE_S", 0.05)
@@ -88,15 +88,15 @@ def setup(monkeypatch):
 
 
 def device_bpm(es8, label):
-    from es8ctl.codec import parse_patch_label, split_dump, unpack_page
-    from es8ctl.patch import decode_patch
+    from es8core.codec import parse_patch_label, split_dump, unpack_page
+    from es8core.patch import decode_patch
 
     dump = split_dump(list(es8.mem.values()))
     return decode_patch(unpack_page(dump.patches[parse_patch_label(label)]))["master_bpm"]
 
 
 def write(loop):
-    from es8ctl import session
+    from es8core import session
 
     original = session.read_pages_async
 

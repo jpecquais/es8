@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from es8ctl.codec import CodecError
-from es8ctl.diff import load_dump
-from es8ctl.system import (
+from es8core.codec import CodecError
+from es8core.diff import load_dump
+from es8core.system import (
     PAGE_FIELDS,
     decode_system,
     encode_system,

@@ -1,13 +1,13 @@
-// es8ctl — interface web (Preact + htm, sans compilation). Textes en anglais.
+// ES8 Control — l'éditeur web (Preact + htm, sans compilation). Textes en anglais.
 // Trois zones : la liste des patchs, le patch (ou la bibliothèque, ou le
 // système) au centre, les modifications en attente à droite. Toute
 // modification rejoint aussitôt la colonne de droite ; rien n'est envoyé à
 // l'ES-8 avant « Write ».
 
-import { html, render, useState, useEffect, useRef, useMemo } from "./vendor/preact-htm.module.js";
-import * as E from "./engine.js";
-import { parseChain, moveLoop, pairUp, mixWithDry, dissolve, canMix } from "./chain.js";
-import { makeDescriber } from "./describe.js";
+import { html, render, useState, useEffect, useRef, useMemo } from "../shared/vendor/preact-htm.module.js";
+import * as E from "../shared/engine.js";
+import { parseChain, moveLoop, pairUp, mixWithDry, dissolve, canMix } from "../shared/chain.js";
+import { makeDescriber } from "../shared/describe.js";
 
 const { store, call, mutate, toast } = E;
 
@@ -121,7 +121,7 @@ function App() {
 
   if (!s.ready) {
     return html`<div class="splash">
-      <span class="logo">es8ctl</span>
+      <span class="logo">ES8 Control</span>
       ${s.bootError ? html`<p class="error">The engine could not load: ${s.bootError}</p>`
         : html`<p>Loading the Python engine…</p><div class="spinner"></div>`}
     </div>`;
@@ -151,7 +151,7 @@ function TopBar({ s, view, setView }) {
   const tabs = [["patch", "Patch"], ["library", "Library"], ["system", "System"]];
   return html`
     <header class="top">
-      <span class="logo">es8ctl</span>
+      <span class="logo">ES8 Control</span>
       <nav class="tabs" role="tablist">
         ${tabs.map(([id, label]) => html`
           <button role="tab" aria-selected=${view === id} onClick=${() => setView(id)}>${label}</button>`)}
