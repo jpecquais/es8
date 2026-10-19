@@ -139,7 +139,12 @@ async def read_names_async(
                 transport.send(request_message(NAMELIST_FIRST_ID + first, NAMELIST_FIRST_ID + last))
                 await collect(set(range(first * NAMES_PER_MESSAGE, (last + 1) * NAMES_PER_MESSAGE)))
             gaps = sorted({n // NAMES_PER_MESSAGE for n in range(total)} - {n // NAMES_PER_MESSAGE for n in names})
-            missing = [(m, m) for m in gaps]
+            missing = []  # messages manquants consécutifs : une seule requête par série
+            for m in gaps:
+                if missing and m == missing[-1][1] + 1:
+                    missing[-1] = (missing[-1][0], m)
+                else:
+                    missing.append((m, m))
             if not missing:
                 break
     finally:

@@ -97,20 +97,23 @@ async function setupMidi() {
   midiAccess.onstatechange = listPorts;
   store.set({ midi: "ok" });
   listPorts();
-  // Ports déjà utilisés avec succès : on se resynchronise tout seul (≈ 10 s).
   const prefs = loadPrefs();
-  if (prefs.syncedOut && prefs.syncedOut === portName(store.state.out)) sync();
+  if (prefs.syncedOut && prefs.syncedOut === portName(store.state.out)) {
+    sync(); // ports déjà utilisés avec succès : on se resynchronise tout seul (≈ 10 s)
+  } else if (!prefs.out) {
+    connect(); // première visite : on cherche l'ES-8 sur tous les ports, puis on se connecte
+  }
 }
 
 function listPorts() {
   const outputs = [...midiAccess.outputs.values()].map((p) => ({ id: p.id, name: p.name }));
   const inputs = [...midiAccess.inputs.values()].map((p) => ({ id: p.id, name: p.name }));
   const prefs = loadPrefs();
+  // Port en cours, sinon celui choisi la dernière fois, sinon le premier ; « Find my ES-8 » fait mieux.
   const pick = (ports, current, saved) => {
     if (ports.some((p) => p.id === current)) return current;
     const byName = ports.find((p) => p.name === saved);
-    const widi = ports.find((p) => /widi/i.test(p.name));
-    return (byName || widi || ports[0] || {}).id || "";
+    return (byName || ports[0] || {}).id || "";
   };
   store.set({
     outputs, inputs,
@@ -118,6 +121,70 @@ function listPorts() {
     in: pick(inputs, store.state.in, prefs.in),
   });
   connectPorts();
+}
+
+// ---------------------------------------------------------------- recherche de l'ES-8
+
+const rolandSum = (bytes) => (128 - (bytes.reduce((a, b) => a + b, 0) % 128)) % 128;
+const es8Message = (command, body) => [0xf0, 0x41, 0x00, 0x00, 0x00, 0x00, 0x14, command, ...body, rolandSum(body), 0xf7];
+const EDITOR_ON = es8Message(0x12, [0x7f, 0x50, 0x00, 0x01]);
+const EDITOR_OFF = es8Message(0x12, [0x7f, 0x50, 0x00, 0x00]);
+const ASK_NAMES = es8Message(0x11, [0x20, 0x00, 0x00, 0x00]); // un message de la liste des noms
+// Réponse d'une ES-8 à la demande de noms, cherchée n'importe où dans l'événement (SysEx parfois collés).
+const ANSWER = [0xf0, 0x41, 0x00, 0x00, 0x00, 0x00, 0x14, 0x12, 0x20];
+const isES8Answer = (d) => {
+  for (let i = 0; i + ANSWER.length <= d.length; i++) {
+    if (ANSWER.every((b, k) => k === 2 || d[i + k] === b)) return true; // octet 2 : device ID
+  }
+  return false;
+};
+
+/**
+ * Trouve la sortie et l'entrée reliées à une ES-8 : sur chaque sortie, demande
+ * un message que seule une ES-8 sait rendre (liste des noms) et regarde sur
+ * quelle entrée il revient. Ne dépend ni du nom ni du type d'interface (une
+ * interface Bluetooth peut répondre elle-même aux requêtes d'identité MIDI).
+ */
+export async function findES8() {
+  if (!midiAccess || store.state.busy) return false;
+  const outputs = [...midiAccess.outputs.values()];
+  const inputs = [...midiAccess.inputs.values()];
+  if (!outputs.length || !inputs.length) { toast("No MIDI port found. Connect the MIDI interface, then try again.", "error", 0); return false; }
+  store.set({ busy: { label: "Looking for the ES-8", n: 0, total: outputs.length } });
+  let heardOn = null;
+  const listeners = inputs.map((input) => {
+    const fn = (event) => { if (isES8Answer(event.data)) heardOn = input; };
+    input.addEventListener("midimessage", fn);
+    return [input, fn];
+  });
+  let found = null;
+  try {
+    for (const [k, output] of outputs.entries()) {
+      store.set({ busy: { label: "Looking for the ES-8", n: k, total: outputs.length } });
+      heardOn = null;
+      try {
+        output.send(EDITOR_ON);
+        await new Promise((r) => setTimeout(r, 150));
+        output.send(ASK_NAMES);
+        for (let t = 0; t < 12 && !heardOn; t++) await new Promise((r) => setTimeout(r, 100));
+        output.send(EDITOR_OFF);
+      } catch { /* port indisponible : suivant */ }
+      if (heardOn) { found = { out: output, in: heardOn }; break; }
+      await new Promise((r) => setTimeout(r, 300)); // laisser le port se calmer avant le suivant
+    }
+    if (found) await new Promise((r) => setTimeout(r, 1500)); // l'ES-8 finit de répondre et quitte le mode éditeur
+  } finally {
+    listeners.forEach(([input, fn]) => input.removeEventListener("midimessage", fn));
+    store.set({ busy: null });
+    connectPorts();
+  }
+  if (!found) {
+    toast("No ES-8 answered. Check that both MIDI cables are connected (or the Bluetooth adapter is paired) and that the ES-8 is on its play screen, then pick the ports by hand.", "warn", 0);
+    return false;
+  }
+  choosePorts(found.out.id, found.in.id);
+  toast(`ES-8 found: sending on "${found.out.name}", listening on "${found.in.name}".`, "ok");
+  return true;
 }
 
 export function choosePorts(out, inp) {
@@ -167,13 +234,22 @@ export async function sync() {
   });
   if (!result) return false;
   if (result.names.names < 800 || result.sys.missing_pages.length) {
-    toast("The ES-8 did not answer. Check the MIDI cables or WIDI pairing, the ports, and that the ES-8 is on its play screen.", "error", 0);
+    toast("The ES-8 did not answer. Check the MIDI cables (or the Bluetooth adapter pairing), the ports, and that the ES-8 is on its play screen. \"Find my ES-8\" in the top-right menu can pick the ports for you.", "error", 0);
     return false;
   }
   store.set({ synced: true, fileName: null });
   savePrefs({ syncedOut: portName(store.state.out) });
   saveCache();
   return true;
+}
+
+/** Bouton « Connect » : trouve d'abord l'ES-8 si ces ports n'ont jamais servi, puis se synchronise. */
+export async function connect() {
+  const prefs = loadPrefs();
+  if (!(prefs.syncedOut && prefs.syncedOut === portName(store.state.out))) {
+    if (!(await findES8())) return false;
+  }
+  return sync();
 }
 
 export async function readDevice() {

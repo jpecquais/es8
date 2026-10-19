@@ -287,3 +287,16 @@ def test_build_web_produces_a_static_site(tmp_path):
                  "shared/chain.js", "shared/describe.js", "shared/vendor/preact-htm.module.js",
                  "shared/es8core.zip", ".nojekyll"):
         assert (tmp_path / "site" / name).is_file()
+
+
+def test_push_splits_and_joins_sysex():
+    """Web MIDI peut livrer des SysEx collés ou en morceaux : la file reçoit des messages entiers."""
+    webapp.transport.queue = asyncio.Queue()
+    a = bytes([0xF0, 0x41, 0x10, 0x20, 0xF7])
+    b = bytes([0xF0, 0x41, 0x11, 0xF7])
+    webapp.push(a + b)                       # deux messages dans un événement
+    webapp.push(b[:2])                       # un message en deux morceaux…
+    webapp.push(bytes([0xF8]) + b[2:])       # … avec un octet temps réel au milieu
+    webapp.push(bytes([0x90, 0x40, 0x7F]))   # note : ignorée
+    got = [webapp.transport.queue.get_nowait() for _ in range(webapp.transport.queue.qsize())]
+    assert got == [a, b, b]

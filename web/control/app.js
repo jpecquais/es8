@@ -161,7 +161,7 @@ function TopBar({ s, view, setView }) {
       <span class="grow"></span>
       ${s.busy ? html`<span class="busy"><span>${s.busy.label}</span>
         <progress max=${s.busy.total || 1} value=${s.busy.n}></progress></span>` : null}
-      ${E.hasDevice() && !s.synced && !s.busy ? html`<button class="btn primary" onClick=${E.sync}>Connect to the ES-8</button>` : null}
+      ${s.midi === "ok" && !s.synced && !s.busy ? html`<button class="btn primary" onClick=${E.connect}>Connect to the ES-8</button>` : null}
       <${Connection} s=${s} />
     </header>`;
 }
@@ -203,6 +203,8 @@ function Connection({ s }) {
             ? "This browser has no Web MIDI: use Chrome, Edge or Opera. .syx files still work."
             : s.midi === "denied" ? "Allow MIDI access (with SysEx) in the site settings, then reload the page."
             : "Looking for MIDI ports…"}</p>`}
+        ${s.midi === "ok" ? html`<button class="btn" disabled=${s.busy} onClick=${() => { setOpen(false); E.findES8(); }}
+          title="Ask every MIDI output for the ES-8 and pick the ports it answers on">Find my ES-8</button>` : null}
         <div class="row2">
           <button class="btn primary" disabled=${!device || s.busy} onClick=${() => { setOpen(false); E.sync(); }}>Connect <small>≈ 10 s</small></button>
           <button class="btn" disabled=${!device || s.busy} onClick=${() => { setOpen(false); E.readDevice(); }}>Read everything <small>≈ 2 min 30</small></button>
@@ -243,12 +245,12 @@ function Welcome({ s }) {
       <h1>A free editor for the ES-8</h1>
       <p>Connect to load your patch names and settings (about 10 seconds). Each patch is then read when you open it.</p>
       <ol>
-        <li>Connect the ES-8 MIDI IN and OUT to the computer (USB MIDI interface or WIDI).</li>
+        <li>Connect the ES-8 MIDI IN and OUT to the computer, in both directions (USB MIDI interface or Bluetooth MIDI adapter).</li>
         <li>Leave the ES-8 on its play screen: on the Bulk Dump screen it ignores incoming data.</li>
-        <li>Check the ports in the menu at the top right, then connect.</li>
+        <li>Press Connect. The ports are found automatically; you can also pick them in the menu at the top right.</li>
       </ol>
       <div class="row2">
-        <button class="btn primary" disabled=${!device || s.busy} onClick=${E.sync}>Connect to the ES-8</button>
+        <button class="btn primary" disabled=${s.midi !== "ok" || s.busy} onClick=${E.connect}>Connect to the ES-8</button>
         <label class="btn">Open a .syx file<input type="file" accept=".syx" hidden
           onChange=${(e) => e.target.files[0] && E.openFile(e.target.files[0])} /></label>
       </div>

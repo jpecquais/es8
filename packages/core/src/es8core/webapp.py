@@ -72,10 +72,32 @@ def set_sender(fn) -> None:
     transport.sender = fn
 
 
+_sysex = bytearray()  # message SysEx en cours de réception
+
+
 def push(data) -> None:
+    """Octets reçus par Web MIDI → messages SysEx complets dans la file.
+
+    Un événement Web MIDI peut contenir plusieurs SysEx collés, ou un SysEx
+    en morceaux (constaté via une interface Bluetooth) : on découpe de F0 à F7.
+    Les octets temps réel (F8-FF) glissés dans un SysEx sont ignorés, le reste
+    (messages de canal) ne sert pas à l'éditeur.
+    """
+    global _sysex
     raw = bytes(data.to_py()) if hasattr(data, "to_py") else bytes(data)
-    if raw[:1] == b"\xf0":  # SysEx uniquement (le reste ne sert pas à l'éditeur)
-        transport.queue.put_nowait(raw)
+    for byte in raw:
+        if byte == 0xF0:
+            _sysex = bytearray(b"\xf0")
+        elif _sysex:
+            if byte >= 0xF8:
+                continue
+            if byte & 0x80 and byte != 0xF7:  # statut inattendu : SysEx abandonné
+                _sysex = bytearray()
+                continue
+            _sysex.append(byte)
+            if byte == 0xF7:
+                transport.queue.put_nowait(bytes(_sysex))
+                _sysex = bytearray()
 
 
 def _set_frames(frames: dict[int, bytes], source: str) -> None:
