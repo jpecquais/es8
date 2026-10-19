@@ -16,7 +16,7 @@ app inside the installer). Checked on 2026-10-18.
 | Chain order, by drag and drop | yes | yes |
 | Loop on/off, carry-over | yes | yes |
 | MIX (parallel) blocks, including with the dry signal | yes | yes |
-| SEPARATE blocks | yes (context menu) | shown, removable, and typed in the display notation; no menu to create them |
+| SEPARATE blocks (branches to OUT 1 and OUT 2, unmixed) | yes (context menu) | yes (right-click a loop) |
 | Mixer limit (2, shared with carry-over) | yes | yes, with a counter; also enforced by the CLI |
 | Input / output / buffers / output gain / mixer mode and gains | yes | yes |
 | Footswitch functions, CTL mode, CTL off/on values | yes | yes |
@@ -70,8 +70,8 @@ app inside the installer). Checked on 2026-10-18.
 
 ## Not yet checked on the ES-8 itself
 
-- Patches using SEPARATE, stereo loop 7/8 returns, and the mixer counts that
-  depend on them: the rules come from the official editor's code.
+- Stereo loop 7/8 returns and the mixer counts that depend on them: the rules
+  come from the official editor's code.
 - What the ES-8 does with half a page (if a write is cut between the two
   messages of a page). Both cases are simulated in
   `tests/test_interrupted_write.py`; the read-back check repairs either one.

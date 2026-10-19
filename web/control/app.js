@@ -6,7 +6,7 @@
 
 import { html, render, useState, useEffect, useRef, useMemo } from "../shared/vendor/preact-htm.module.js";
 import * as E from "../shared/engine.js";
-import { parseChain, moveLoop, pairUp, mixWithDry, dissolve, canMix } from "../shared/chain.js";
+import { parseChain, moveLoop, pairUp, mixWithDry, dissolve, canMix, canSeparate, separate } from "../shared/chain.js";
 import { makeDescriber } from "../shared/describe.js";
 
 const { store, call, mutate, toast } = E;
@@ -450,7 +450,8 @@ function Chain({ d, f, N, stage, setAt, dirty }) {
       ? html`<button class="pair" title="Mix these two loops in parallel" onClick=${() => setChain(pairUp(text, k))}>∥</button>` : null;
     const node = it.loop ? loopBox(it.loop, true) : html`
       <div class="par ${it.par === "[" ? "separate" : "mix"}">
-        <span class="kind">${it.par === "[" ? "SEPARATE" : "MIX"}</span>
+        <span class="kind" title=${it.par === "[" ? "The two branches go to OUT 1 and OUT 2 without being mixed" : "The two branches are mixed (uses a mixer)"}>
+          ${it.par === "[" ? "SEPARATE" : "MIX"}</span>
         <button class="unpar" title="Back to a single line" onClick=${() => setChain(dissolve(text, k))}>×</button>
         ${it.lanes.map((lane, j) => html`<div class="lane">
           ${lane.length ? lane.map((x, m) => html`${loopBox(x.loop, false)}${m + 1 < lane.length ? html`<span class="wire"></span>` : null}`)
@@ -465,7 +466,7 @@ function Chain({ d, f, N, stage, setAt, dirty }) {
   return html`
     <section class="sect">
       <div class="sect-h"><h4>Chain</h4>
-        <span class="hint">Click: on/off · drag: move · ∥ between two loops: mix in parallel · right-click: more · CO: carry-over</span>
+        <span class="hint">Click: on/off · drag: move · ∥ between two loops: mix in parallel · right-click: mix with dry, separate outputs · CO: carry-over</span>
         <span class="grow"></span>
         <span class="mixers ${d.mixers >= 2 ? "full" : ""}" title="The ES-8 has 2 mixers, shared by MIX blocks and carry-over loops">
           Mixers ${d.mixers} / 2</span></div>
@@ -484,6 +485,8 @@ function Chain({ d, f, N, stage, setAt, dirty }) {
         <button class="link" onClick=${() => { setMenu(null); setAt("carry_over_loop", m, f.carry_over_loop[m] ? 0 : 1); }}>
           ${f.carry_over_loop[m] ? "Carry-over off" : "Carry-over on"}</button>
         ${menu.top && canMix(text) && mixersFree ? html`<button class="link" onClick=${() => setChain(mixWithDry(text, menu.loop))}>Mix with the dry signal</button>` : null}
+        ${menu.top && canSeparate(text) ? html`<button class="link" title="Its branch goes to one output, the other branch to the other output; no mixer used"
+          onClick=${() => setChain(separate(text, menu.loop))}>Send to separate outputs (SEPARATE)</button>` : null}
         ${!menu.top ? html`<button class="link" onClick=${() => setChain(moveLoop(text, menu.loop, { end: true }))}>Take out of the block</button>` : null}
         <button class="link muted" onClick=${() => setMenu(null)}>Close</button>
       </div>` : null}

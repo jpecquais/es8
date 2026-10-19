@@ -26,6 +26,8 @@ console.log(JSON.stringify({
   withDry: c.mixWithDry("V87654321", "4"),
   full: c.canMix("(1//2)(3//4)V5678"),
   dissolve: c.dissolve(t, 5),
+  separate: c.separate("V87654321", "4"),
+  separateTwice: c.canSeparate("[4//]V8765321"),
 }));
 """
 
@@ -43,6 +45,7 @@ def test_chain_operations():
     assert r["dry"] == "V7(4//8)65321"
     assert r["pair"] == "V(8//7)654321" and r["withDry"] == "V8765(4//)321" and r["full"] is False
     assert r["dissolve"] == "V8746" + "35" + "21"
+    assert r["separate"] == "[4//]V8765321" and r["separateTwice"] is False
     for text in r.values():  # tout résultat est accepté par le moteur
         if isinstance(text, str):
             parse(text)

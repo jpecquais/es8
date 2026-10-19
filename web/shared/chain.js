@@ -136,3 +136,24 @@ export function dissolve(text, index) {
   items.splice(index, 0, ...it.lanes[0], ...it.lanes[1]);
   return serialize(items);
 }
+
+/** Encore possible de créer un SEPARATE ? Il se place côté sorties, en tête de liste : un seul à cet endroit. */
+export const canSeparate = (text) => {
+  const items = parseChain(text);
+  return !(items[0] && items[0].par === "[");
+};
+
+/**
+ * Envoie une loop de la chaîne principale vers les sorties séparées : bloc
+ * SEPARATE en tête de liste (juste avant OUT 1 / OUT 2), l'autre branche est
+ * le signal sec. Les branches ne sont pas remélangées : pas de mixer utilisé.
+ */
+export function separate(text, loop) {
+  if (!canSeparate(text)) return text;
+  const items = clone(parseChain(text));
+  const i = items.findIndex((it) => it.loop === loop);
+  if (i < 0) return text;
+  items.splice(i, 1);
+  items.unshift({ par: "[", lanes: [[{ loop }], []] });
+  return serialize(items);
+}
