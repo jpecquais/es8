@@ -1,13 +1,15 @@
-# es8ctl
+# es8
 
-A free, open-source editor for the BOSS ES-8 Effects Switching System:
+Free, open-source tools for the BOSS ES-8 Effects Switching System:
 
-- a **web editor** that talks to the ES-8 from the browser over Web MIDI;
-- a **command-line tool** that scripts, AI agents and you can drive.
+- **ES8 Control**, a web editor that talks to the ES-8 from the browser over
+  Web MIDI (ES8 Designer will follow);
+- **es8ctl**, a command line that scripts, AI agents and you can drive, also
+  available as a Docker image;
+- **es8core**, the engine they share.
 
-Both use the same Python library, so they decode, validate and write the
-ES-8 data in exactly the same way. Every write is read back from the ES-8
-and checked before it counts as done.
+They all decode, validate and write the ES-8 data with the same engine.
+Every write is read back from the ES-8 and checked before it counts as done.
 
 > Not affiliated with Roland or BOSS. "BOSS" and "ES-8" are trademarks of
 > Roland Corporation, used here only to say which device this works with.
@@ -24,13 +26,13 @@ and checked before it counts as done.
 Leave the ES-8 on its play screen while editing. On the Bulk Dump screen it
 silently ignores everything it receives.
 
-## Web editor
+## ES8 Control (web editor)
 
 Open the hosted editor (see [Hosting](#hosting)), or run it locally:
 
 ```sh
 uv sync
-uv run es8ctl web          # opens http://localhost:8765
+uv run es8ctl web          # opens http://localhost:8765/control/
 ```
 
 Accept the browser's request for MIDI access with SysEx, check the ports in
@@ -80,11 +82,11 @@ the official BOSS editor: at most 2 mixers (shared by MIX blocks and
 carry-over loops), no block inside another block, and SEPARATE only at the
 output end.
 
-## Command line
+## es8ctl (command line)
 
 ```sh
-uv sync
-uv run es8ctl --help
+uv tool install es8ctl     # once published; from this repository: uv sync && uv run es8ctl --help
+es8ctl --help
 ```
 
 All commands print JSON and are dry runs unless you pass `--write`.
@@ -126,18 +128,43 @@ Bluetooth, about 1 page in 60 gets lost on the first pass.
 
 `docs/agent-contract.md` describes how an AI agent should drive the CLI.
 
-## Hosting
+### Docker
 
-The web editor is a static site: all the work happens in the browser, so any
-HTTPS host works.
+```sh
+docker run --rm -v "$PWD:/work" ghcr.io/<owner>/es8-cli transform set "master_bpm=120" -b dump.syx
+```
+
+On macOS and Windows, Docker cannot reach MIDI devices: use the image for
+work without the pedal (preparing changes, dry runs, file conversion), or
+install the CLI with uv to talk to the ES-8. On Linux, including a Raspberry
+Pi, pass the sound devices to reach the ES-8:
+`docker run --rm --device /dev/snd -v "$PWD:/work" ghcr.io/<owner>/es8-cli names -p <port>`.
+
+## Hosting and releases
+
+The web apps are a static site: all the work happens in the browser, so any
+HTTPS host works. One site holds the home page and every app, so the apps
+share the MIDI permission and the last read of the ES-8:
+
+```
+https://<owner>.github.io/<repo>/            home page
+https://<owner>.github.io/<repo>/control/    ES8 Control
+https://<owner>.github.io/<repo>/designer/   ES8 Designer (later)
+```
 
 ```sh
 uv run es8ctl build-web --out dist/site
 ```
 
-The repository includes a GitHub Actions workflow (`.github/workflows/pages.yml`)
-that publishes the editor to GitHub Pages on every push to `main`. Turn it on
-once in **Settings → Pages → Build and deployment → Source: GitHub Actions**.
+GitHub Actions workflows:
+
+- `ci.yml` runs the tests and builds the Docker image on every push;
+- `pages.yml` publishes the site on every push to `main` (turn it on once in
+  **Settings → Pages → Source: GitHub Actions**);
+- `release.yml` runs on a `vX.Y.Z` tag. It publishes the Docker image
+  (`ghcr.io/<owner>/es8-cli`, amd64 and arm64) and the `es8core` and `es8ctl`
+  packages on PyPI. For PyPI, add this workflow once as a trusted publisher
+  for each package on pypi.org.
 
 ## How it works
 
@@ -153,31 +180,36 @@ Developer notes, in French:
 - `PLAN.md`: the plan and its progress.
 
 ```
-src/es8ctl/
-  cli.py        command line (typer)
-  codec/        Roland SysEx envelope, ES-8 bulk frames and pages
-  layout.py     bit-packed fields ↔ JSON
-  patch.py      patch field map (firmware 2)
-  system.py     system field map
-  routing.py    loop chain ↔ display notation, hardware routing rules
-  transform.py  bulk changes
-  apply.py      changes → pages → frames, validation
-  session.py    talking to the ES-8 (reads, verified writes), transport-independent
-  request.py    remote reads, name list
-  live.py       direct commands (select, rename, copy, exchange, init)
-  bel.py        .bel import/export
-  webapp.py     bridge between the browser and the library (runs in Pyodide)
-  labels.py     value labels shown by the web editor
-  factory.py    the factory patch
-  web/          the web editor (Preact + htm, no build step)
-tests/
+packages/
+  core/src/es8core/     the engine (no dependencies, also runs in Pyodide)
+    codec/              Roland SysEx envelope, ES-8 bulk frames and pages
+    layout.py           bit-packed fields ↔ JSON
+    patch.py, system.py field maps (firmware 2)
+    routing.py          loop chain ↔ display notation, hardware routing rules
+    transform.py        bulk changes
+    apply.py            changes → pages → frames, validation
+    session.py          talking to the ES-8 (reads, verified writes), any transport
+    request.py, live.py remote reads, name list, direct commands
+    bel.py              .bel import/export
+    webapp.py           bridge used by the web apps
+    labels.py           value labels shown by the web apps
+  cli/src/es8ctl/       the command line (typer, mido); Dockerfile next to it
+web/
+  shared/               shared by the apps: Pyodide, Web MIDI, cache, chain model, Preact
+  control/              ES8 Control
+site/                   home page
+tests/                  tests for everything above
 ```
 
 ## Development
 
+The repository is a uv workspace: one `uv sync` installs both packages in
+editable mode.
+
 ```sh
 uv sync
 uv run pytest
+uv run es8ctl web          # serves site/ and web/ live: edit and reload
 ```
 
 The tests run without an ES-8, using captured dumps and simulated devices.
@@ -185,5 +217,5 @@ This includes simulated interrupted writes (`tests/test_interrupted_write.py`).
 
 ## License
 
-AGPL-3.0-or-later, see `LICENSE`. The web editor bundles Preact (MIT) and htm (Apache-2.0),
-and loads Pyodide (MPL-2.0) from its CDN.
+AGPL-3.0-or-later, see `LICENSE`. The web apps bundle Preact (MIT) and htm (Apache-2.0),
+and load Pyodide (MPL-2.0) from its CDN.
