@@ -1,5 +1,7 @@
-name: web editor
+name: web apps
 
+# Publie l'accueil et les applis web (ES8 Control, puis ES8 Designer) sur
+# GitHub Pages : https://<owner>.github.io/<dépôt>/ ; /control/ ; /designer/.
 on:
   push:
     branches: [main]
