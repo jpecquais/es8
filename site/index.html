@@ -12,7 +12,7 @@
   <style>
     /* Thème de la pédale : acier noir, sérigraphie blanche, LED bleues. */
     :root {
-      --bg: #0c0d0f; --panel: #1b1c20; --raised: #24262b; --ink: #f1f2f4; --muted: #8d939c; --line: #2e3036;
+      --bg: #0c0d0f; --panel: #1b1c20; --raised: #24262b; --ink: #f4f5f7; --soft-ink: #d5d9df; --muted: #b3b9c2; --line: #3d4048;
       --metal: #111214; --led: #3d8bff; --led-glow: #73adff; --seg: #ff2d1f; --accent: #4f8fe6; --on-accent: #ffffff;
       --font-display: "Barlow Condensed", "Arial Narrow", sans-serif;
       --font-body: "Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -20,24 +20,25 @@
       color-scheme: dark;
     }
     * { box-sizing: border-box; }
-    body { margin: 0; background: var(--bg); color: var(--ink); font: 400 17px/1.55 var(--font-body); }
+    body { margin: 0; min-height: 100vh; color: var(--ink); font: 400 17px/1.55 var(--font-body);
+      background: radial-gradient(1100px 520px at 50% -8%, #262930, var(--bg) 70%) var(--bg); }
     main { max-width: 920px; margin: 0 auto; padding: 56px 20px 80px; display: grid; gap: 40px; }
     h1, h2 { font-family: var(--font-display); font-weight: 600; margin: 0; line-height: 1.05; }
     h1 { font-size: clamp(40px, 7vw, 64px); font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em; }
     h2 { font-size: 26px; }
     p { margin: 0; }
-    .lead { color: var(--muted); max-width: 62ch; }
+    .lead { color: var(--soft-ink); max-width: 62ch; }
     .leds { display: flex; gap: 10px; }
     .leds i { width: 12px; height: 12px; border-radius: 50%; background: #0b1220; box-shadow: inset 0 0 0 1px #000; }
     .leds i.on { background: var(--led-glow); box-shadow: 0 0 6px 1px var(--led), 0 0 16px 2px rgba(61, 139, 255, 0.45); }
     .apps { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
-    .app { display: grid; gap: 10px; align-content: start; padding: 20px; background: linear-gradient(180deg, #23252a, var(--panel)); border: 1px solid #000; border-radius: 10px; box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06) inset, 0 6px 18px rgba(0, 0, 0, 0.5); }
-    .app .tag { font: 600 12px var(--font-display); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
-    .app p { color: var(--muted); font-size: 15px; }
+    .app { display: grid; gap: 10px; align-content: start; padding: 20px; background: linear-gradient(180deg, #2b2e34, #202227); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06) inset, 0 6px 18px rgba(0, 0, 0, 0.5); }
+    .app .tag { font: 700 12px var(--font-display); letter-spacing: 0.12em; text-transform: uppercase; color: var(--led-glow); }
+    .app p { color: var(--soft-ink); font-size: 15px; }
     .btn { justify-self: start; display: inline-block; margin-top: 6px; padding: 9px 16px; border-radius: 6px; background: var(--accent); color: var(--on-pending); font-weight: 600; text-decoration: none; }
-    .soon { justify-self: start; margin-top: 6px; padding: 8px 14px; border: 1px dashed var(--line); border-radius: 6px; color: var(--muted); font-size: 14px; }
-    pre { margin: 0; padding: 12px 14px; overflow-x: auto; background: var(--metal); border-radius: 8px; font: 13px/1.6 var(--font-mono); }
-    .needs { display: grid; gap: 8px; padding-left: 20px; margin: 0; color: var(--muted); }
+    .soon { justify-self: start; margin-top: 6px; padding: 8px 14px; border: 1px dashed #5a5f69; border-radius: 6px; color: var(--muted); font-size: 14px; }
+    pre { margin: 0; padding: 12px 14px; overflow-x: auto; background: #08090b; border: 1px solid var(--line); border-radius: 8px; color: var(--ink); font: 13px/1.6 var(--font-mono); }
+    .needs { display: grid; gap: 8px; padding-left: 20px; margin: 0; color: var(--soft-ink); }
     footer { color: var(--muted); font-size: 13px; }
     a { color: var(--accent); }
     code { font: 0.85em var(--font-mono); }
