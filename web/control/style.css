@@ -453,7 +453,7 @@ select, input:not([type]), input[type="number"], input[type="search"], textarea 
   font-family: var(--font-lcd);
 }
 .lcd .p-name {
-  width: calc(16ch + 14px); margin: 0; padding: 0 6px; border: 1px solid transparent; border-radius: 2px; background: none;
+  width: calc(16ch + 16 * 0.04em + 16px); margin: 0; padding: 0 6px; /* 16 caractères + leur espacement */ border: 1px solid transparent; border-radius: 2px; background: none;
   color: var(--lcd-ink); font: 400 36px/1.1 var(--font-lcd); letter-spacing: 0.04em; text-transform: none;
   text-shadow: 0 0 4px rgba(200, 220, 255, 0.45);
 }
