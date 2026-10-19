@@ -14,6 +14,7 @@ apportées par la recherche initiale, et la séquence de travail.
 | 3 — Transformations en masse | ✅ | Les 3 cas d'usage écrits et vérifiés sur l'appareil : 50 variantes, tap tempo sur 800 patchs, échange 6 ↔ 7 sur 800 patchs (`apply --confirm`) |
 | 4 — Temps réel | ✅ | Protocole de l'éditeur officiel : lecture à distance (`es8ctl read`), commandes directes vérifiées sur l'appareil (`es8ctl patch select/rename/copy/exchange/init`). L'éditeur n'a pas d'adresse par paramètre : l'édition fine passe par l'écriture de pages (`apply`) |
 | 5 — GUI / contrat agent | ✅ | Interface web en anglais (`es8ctl web`, site statique `es8ctl build-web`, publication GitHub Pages prête) : parité vérifiée avec l'éditeur officiel (`docs/editor-parity.md`), testée sur l'appareil. Contrat agent en anglais (`docs/agent-contract.md`) |
+| 6 — Rigs | 📝 | Proposition : pedalboard → rig (une banque) → snapshot (un patch), compilé en changements `apply`. Spéc : `docs/rig-model.md` |
 
 Hors plan : import / export `.bel` (`es8ctl import-bel` / `export-bel`).
 Détails du format et journal des essais : `docs/bulk-format.md`.
@@ -115,6 +116,31 @@ par paramètre. Puis `watch` / édition live.
 La GUI s'appuie sur la même lib que le CLI, sans logique dupliquée. Le contrat
 agent est documenté : le LLM n'accède qu'au CLI, jamais au MIDI.
 
+### Étape 6 — Rigs : édition par intention
+
+Faire de l'ES-8 un contrôleur de rigs : une banque = un rig (chaîne de loops,
+programmes chargés sur chaque appareil MIDI, surface de contrôle), un patch =
+un snapshot. L'ES-8 détient l'état et pilote les destinations (Live ou tout
+appareil MIDI). Modèle, schémas et règles de compilation : `docs/rig-model.md`.
+
+Principe : un compilateur de plus, qui produit le format de changements de
+`transform`. Ni nouveau chemin d'écriture, ni logique en JS.
+
+1. Session hardware : les 5 questions de `docs/rig-model.md` (toggles au
+   rappel, LED en `TGL`, PC répété, encodages), sur une banque sacrifiable.
+2. `es8ctl/model/` : schémas pedalboard / surface / rig / setup, validation,
+   `compile_rig` + vérifications. Tests hors ligne sur les fixtures.
+3. CLI : `es8ctl rig compile` → `apply` ; premier rig écrit et vérifié sur
+   l'appareil. Contrat agent étendu.
+4. App web `rigs/` à part de l'éditeur classique, moteur partagé
+   (`web/shared/`) : pont `stage_rig`, écrans Rig et Surface, verrou de
+   connexion, badges « géré par le rig » dans l'éditeur classique.
+5. `es8ctl rig import --bank N` et détection de divergence après `read`.
+6. Écran Pedalboard et bibliothèque de fiches d'appareils. Setlists ensuite.
+
+Critère de sortie : un rig de 8 snapshots décrit en JSON, compilé, écrit et
+relu identique ; rappel au pied vérifié au moniteur (PC et CC attendus).
+
 ## 5. Sûreté (règles permanentes)
 
 - Read-only par défaut ; écriture uniquement via sous-commande explicite + `--write`.
@@ -133,6 +159,9 @@ agent est documenté : le LLM n'accède qu'au CLI, jamais au MIDI.
 - Comportement de l'ES-8 sur réception partielle d'un restore (dès l'étape 2).
   *Simulé (`tests/test_interrupted_write.py`) : la relecture répare tous les cas ;
   reste à savoir ce que l'appareil fait d'une demi-page seule.*
+- Rigs (étape 6) : état des toggles au rappel d'un patch, LED d'un assign en
+  `TGL`, PC répété, encodages de `midi_pc` et `manual_number`
+  (`docs/rig-model.md`, dernière section).
 
 ## 7. Références
 
