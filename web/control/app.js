@@ -178,6 +178,7 @@ function Connection({ s }) {
   const g = s.grid;
   let state = "off", text = "No MIDI port";
   if (s.midi === "unsupported") text = "Web MIDI unavailable";
+  else if (s.midi === "insecure") text = "No MIDI on this address";
   else if (s.midi === "denied") text = "MIDI access denied";
   else if (device) { state = s.synced ? "on" : "idle"; text = E.portName(s.out); }
   let source = "";
@@ -201,6 +202,7 @@ function Connection({ s }) {
             </select></label>`
         : html`<p class="muted">${s.midi === "unsupported"
             ? "This browser has no Web MIDI: use Chrome, Edge or Opera. .syx files still work."
+            : s.midi === "insecure" ? "Browsers give Web MIDI only to https:// or localhost addresses. .syx files still work."
             : s.midi === "denied" ? "Allow MIDI access (with SysEx) in the site settings, then reload the page."
             : "Looking for MIDI ports…"}</p>`}
         ${s.midi === "ok" ? html`<button class="btn" disabled=${s.busy} onClick=${() => { setOpen(false); E.findES8(); }}

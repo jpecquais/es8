@@ -4,6 +4,13 @@
 // Aucune logique ES-8 ici : lecture, décodage, validation et écriture sont
 // faits par le code Python du CLI, exécuté dans le navigateur.
 // Textes affichés : en anglais.
+//
+// Points d'extension, pour une appli qui s'appuie sur ce moteur (définis avant le premier import de ce module) :
+// globalThis.ES8_ENGINE = {
+//   zip: URL d'une archive de modules Python à ajouter (qui peut contenir es8core),
+//   module: module Python servant de pont à la place de "es8core.webapp" (il en reprend les fonctions),
+//   midiAccess: async () => objet de la forme de Web MIDI (inputs, outputs), ou null pour Web MIDI du navigateur,
+// }
 
 const PYODIDE_URL = "https://cdn.jsdelivr.net/pyodide/v0.27.7/full/";
 const LIB_DIR = "/home/pyodide/lib";
@@ -19,7 +26,7 @@ export const store = {
   state: {
     ready: false, // moteur Python chargé
     bootError: null,
-    midi: "pending", // pending | unsupported | denied | ok
+    midi: "pending", // pending | unsupported | insecure (pas de Web MIDI hors https / localhost) | denied | ok
     outputs: [], inputs: [], out: "", in: "",
     synced: false, // système et noms lus sur l'appareil pendant cette session
     busy: null, // { label, n, total } pendant un échange avec l'appareil
@@ -73,10 +80,11 @@ export function refresh() {
 export async function boot() {
   try {
     const pyodide = await loadPyodide({ indexURL: PYODIDE_URL });
-    const archive = await (await fetch(new URL("es8core.zip", import.meta.url))).arrayBuffer();
+    const ext = globalThis.ES8_ENGINE || {};
+    const archive = await (await fetch(new URL(ext.zip || "es8core.zip", ext.zip ? location.href : import.meta.url))).arrayBuffer();
     pyodide.unpackArchive(archive, "zip", { extractDir: LIB_DIR });
     pyodide.runPython(`import sys; sys.path.insert(0, "${LIB_DIR}")`);
-    bridge = pyodide.pyimport("es8core.webapp");
+    bridge = pyodide.pyimport(ext.module || "es8core.webapp");
     store.set({ ready: true, names: call("names") });
     restoreCache();
   } catch (err) {
@@ -87,12 +95,16 @@ export async function boot() {
 }
 
 async function setupMidi() {
-  if (!navigator.requestMIDIAccess) { store.set({ midi: "unsupported" }); return; }
-  try {
-    midiAccess = await navigator.requestMIDIAccess({ sysex: true });
-  } catch {
-    store.set({ midi: "denied" });
-    return;
+  const custom = globalThis.ES8_ENGINE && globalThis.ES8_ENGINE.midiAccess;
+  midiAccess = custom ? await custom() : null; // transport fourni par l'appli (voir en tête), sinon Web MIDI
+  if (!midiAccess) {
+    if (!navigator.requestMIDIAccess) { store.set({ midi: window.isSecureContext ? "unsupported" : "insecure" }); return; }
+    try {
+      midiAccess = await navigator.requestMIDIAccess({ sysex: true });
+    } catch {
+      store.set({ midi: "denied" });
+      return;
+    }
   }
   midiAccess.onstatechange = listPorts;
   store.set({ midi: "ok" });
