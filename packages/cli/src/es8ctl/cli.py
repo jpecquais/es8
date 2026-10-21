@@ -783,6 +783,13 @@ def patch_init(patch: str = typer.Argument(...), port: str = _PORT, port_in: str
     _live("initialize", patch, port=port, port_in=port_in, write=write, backup_dir=backup_dir)
 
 
+def _engine_sources() -> list[Path]:
+    import es8core
+
+    root = Path(es8core.__file__).resolve().parent
+    return [p for p in sorted(root.rglob("*.py")) if "__pycache__" not in p.parts]
+
+
 def library_zip() -> bytes:
     """Le moteur es8core (sources .py) en zip, pour Pyodide dans le navigateur."""
     import io
@@ -793,9 +800,8 @@ def library_zip() -> bytes:
     root = Path(es8core.__file__).resolve().parent
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
-        for path in sorted(root.rglob("*.py")):
-            if "__pycache__" not in path.parts:
-                archive.write(path, Path("es8core") / path.relative_to(root))
+        for path in _engine_sources():
+            archive.write(path, Path("es8core") / path.relative_to(root))
     return buffer.getvalue()
 
 
@@ -812,10 +818,24 @@ def _web_roots() -> dict[str, Path]:
 ZIP_PATH = "shared/es8core.zip"
 
 
+def _lan_address() -> str:
+    """Adresse de cette machine sur le réseau local (une socket UDP « connectée » n'envoie rien)."""
+    import socket
+
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+        try:
+            s.connect(("192.0.2.1", 9))
+            return s.getsockname()[0]
+        except OSError:
+            return socket.gethostname()
+
+
 @app.command()
 def web(
     port: int = typer.Option(8765, "--port", help="Local HTTP port."),
     open_browser: bool = typer.Option(True, "--open/--no-open", help="Open the browser."),
+    lan: bool = typer.Option(False, "--lan", help="Also serve on the local network (another computer or a tablet on the "
+                             "same Wi-Fi). Plain HTTP: browsers give Web MIDI only to https or localhost."),
 ) -> None:
     """Run the web apps locally (Chrome / Edge: Web MIDI). Ctrl-C to stop."""
     import functools
@@ -823,16 +843,25 @@ def web(
     import webbrowser
 
     roots = _web_roots()
-    archive = library_zip()
+    # Le moteur est refait dès qu'une source change : un serveur lancé la veille sert le code du jour.
+    engine = {"key": None, "zip": b""}
+
+    def archive() -> bytes:
+        sources = _engine_sources()
+        key = (len(sources), max((p.stat().st_mtime_ns for p in sources), default=0))
+        if key != engine["key"]:
+            engine.update(key=key, zip=library_zip())
+        return engine["zip"]
 
     class Handler(http.server.SimpleHTTPRequestHandler):
         def do_GET(self):  # noqa: N802 (API http.server)
             if self.path.split("?")[0] == "/" + ZIP_PATH:
+                data = archive()
                 self.send_response(200)
                 self.send_header("Content-Type", "application/zip")
-                self.send_header("Content-Length", str(len(archive)))
+                self.send_header("Content-Length", str(len(data)))
                 self.end_headers()
-                self.wfile.write(archive)
+                self.wfile.write(data)
                 return
             super().do_GET()
 
@@ -851,9 +880,11 @@ def web(
             pass
 
     handler = functools.partial(Handler, directory=str(roots["site"]))
-    server = http.server.ThreadingHTTPServer(("127.0.0.1", port), handler)
+    server = http.server.ThreadingHTTPServer(("0.0.0.0" if lan else "127.0.0.1", port), handler)
     url = f"http://localhost:{port}/control/"
     typer.echo(f"Web editor: {url}  (Chrome or Edge; Ctrl-C to stop)", err=True)
+    if lan:
+        typer.echo(f"On the network: http://{_lan_address()}:{port}/control/", err=True)
     if open_browser:
         webbrowser.open(url)
     try:

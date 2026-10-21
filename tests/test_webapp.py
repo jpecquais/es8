@@ -289,6 +289,13 @@ def test_build_web_produces_a_static_site(tmp_path):
         assert (tmp_path / "site" / name).is_file()
 
 
+def test_lan_address_is_an_ipv4_or_a_host_name():
+    from es8ctl.cli import _lan_address
+
+    address = _lan_address()
+    assert address and " " not in address
+
+
 def test_push_splits_and_joins_sysex():
     """Web MIDI peut livrer des SysEx collés ou en morceaux : la file reçoit des messages entiers."""
     webapp.transport.queue = asyncio.Queue()
