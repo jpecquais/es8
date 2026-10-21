@@ -3,7 +3,7 @@
 Free, open-source tools for the BOSS ES-8 Effects Switching System:
 
 - **ES8 Control**, a web editor that talks to the ES-8 from the browser over
-  Web MIDI (ES8 Designer will follow);
+  Web MIDI;
 - **es8ctl**, a command line that scripts, AI agents and you can drive, also
   available as a Docker image;
 - **es8core**, the engine they share.
@@ -151,7 +151,6 @@ share the MIDI permission and the last read of the ES-8:
 ```
 https://jpecquais.github.io/es8/            home page
 https://jpecquais.github.io/es8/control/    ES8 Control
-https://jpecquais.github.io/es8/designer/   ES8 Designer (later)
 ```
 
 ```sh
