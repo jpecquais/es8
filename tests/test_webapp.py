@@ -289,6 +289,40 @@ def test_build_web_produces_a_static_site(tmp_path):
         assert (tmp_path / "site" / name).is_file()
 
 
+def test_web_server_never_serves_outside_its_folders():
+    """Un « .. » dans le chemin (envoyé tel quel) ne sort pas des dossiers du site."""
+    import http.client
+    import socket
+    import threading
+    import time
+
+    from typer.testing import CliRunner
+
+    from es8ctl.cli import app
+
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+    threading.Thread(target=lambda: CliRunner().invoke(app, ["web", "--no-open", "--port", str(port)]), daemon=True).start()
+
+    def get(path):
+        conn = http.client.HTTPConnection("127.0.0.1", port, timeout=2)
+        conn.request("GET", path)
+        res = conn.getresponse()
+        return res.status, res.read()
+
+    for _ in range(100):  # le temps que le serveur démarre
+        try:
+            assert get("/control/")[0] == 200
+            break
+        except OSError:
+            time.sleep(0.05)
+    for path in ("/control/../../../../../../../../etc/hosts", "/../../../../../../etc/hosts",
+                 "/control/%2e%2e/%2e%2e/%2e%2e/%2e%2e/%2e%2e/%2e%2e/etc/hosts"):
+        status, body = get(path)
+        assert status == 404 and b"localhost" not in body, path
+
+
 def test_lan_address_is_an_ipv4_or_a_host_name():
     from es8ctl.cli import _lan_address
 

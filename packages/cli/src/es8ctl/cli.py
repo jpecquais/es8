@@ -866,8 +866,12 @@ def web(
             super().do_GET()
 
         def translate_path(self, path):
-            # /control/…, /shared/… → web/ ; le reste (accueil) → site/
-            clean = path.split("?")[0].lstrip("/")
+            # /control/…, /shared/… → web/ ; le reste (accueil) → site/. normpath depuis la racine :
+            # un « .. » ne peut pas sortir des dossiers servis.
+            import posixpath
+            from urllib.parse import unquote
+
+            clean = posixpath.normpath("/" + unquote(path.split("?")[0])).lstrip("/")
             first = clean.split("/")[0]
             base = roots["web"] if (roots["web"] / first).is_dir() and first else roots["site"]
             return str(base / clean)
