@@ -14,7 +14,7 @@ apportées par la recherche initiale, et la séquence de travail.
 | 3 — Transformations en masse | ✅ | Les 3 cas d'usage écrits et vérifiés sur l'appareil : 50 variantes, tap tempo sur 800 patchs, échange 6 ↔ 7 sur 800 patchs (`apply --confirm`) |
 | 4 — Temps réel | ✅ | Protocole de l'éditeur officiel : lecture à distance (`es8ctl read`), commandes directes vérifiées sur l'appareil (`es8ctl patch select/rename/copy/exchange/init`). L'éditeur n'a pas d'adresse par paramètre : l'édition fine passe par l'écriture de pages (`apply`) |
 | 5 — GUI / contrat agent | ✅ | Interface web en anglais (`es8ctl web`, site statique `es8ctl build-web`, publication GitHub Pages prête) : parité vérifiée avec l'éditeur officiel (`docs/editor-parity.md`), testée sur l'appareil. Contrat agent en anglais (`docs/agent-contract.md`) |
-| 6 — Rigs | ↗ | Projet à part : ES Eight Stage (`jpecquais/es8-stage`), sur `es8core` |
+| 6 — Rigs | ↗ | Projet à part : ES8 Stage (`jpecquais/es8-stage`), sur `es8core` |
 
 Hors plan : import / export `.bel` (`es8ctl import-bel` / `export-bel`).
 Détails du format et journal des essais : `docs/bulk-format.md`.
@@ -120,7 +120,7 @@ agent est documenté : le LLM n'accède qu'au CLI, jamais au MIDI.
 
 Les rigs (pedalboard → rig → snapshot compilés en changements `apply`), les
 setlists, ES8 Designer, ES8 Companion et l'hôte de scène sur Raspberry Pi
-forment un projet à part, **ES Eight Stage** (`jpecquais/es8-stage`), qui
+forment un projet à part, **ES8 Stage** (`jpecquais/es8-stage`), qui
 s'appuie sur `es8core` sans le modifier. Ce dépôt reste l'éditeur.
 
 ## 5. Sûreté (règles permanentes)

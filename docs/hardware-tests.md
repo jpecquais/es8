@@ -3,7 +3,7 @@
 Chaque ligne indique si on peut la tester sans écrire (🟢), en écrivant sur une
 banque sacrifiable (✍️), et si quelqu'un doit regarder la pédale ou appuyer
 dessus (👀). Les questions propres aux rigs, à la Companion et à l'hôte de
-scène sont suivies dans ES Eight Stage (`jpecquais/es8-stage`).
+scène sont suivies dans ES8 Stage (`jpecquais/es8-stage`).
 
 ## Switches, assignations et LED (séance du 2026-10-20, patch sonde 97-1)
 
