@@ -10,7 +10,10 @@
 //   zip: URL d'une archive de modules Python à ajouter (qui peut contenir es8core),
 //   module: module Python servant de pont à la place de "es8core.webapp" (il en reprend les fonctions),
 //   midiAccess: async () => objet de la forme de Web MIDI (inputs, outputs), ou null pour Web MIDI du navigateur,
+//   bridge: async () => pont distant (mêmes fonctions que le module Python, exécutées ailleurs, et
+//     `remote: true`, `synced()` : l'état lu sur l'appareil est à jour), ou null pour Pyodide dans la page,
 // }
+// Pyodide n'est téléchargé que s'il sert : une page dont le pont est distant ne le charge pas.
 
 const PYODIDE_URL = "https://cdn.jsdelivr.net/pyodide/v0.27.7/full/";
 const LIB_DIR = "/home/pyodide/lib";
@@ -45,6 +48,7 @@ export const store = {
 };
 
 let bridge = null;
+let remote = false; // pont distant : l'état de l'appareil vit ailleurs, pas de cache dans le navigateur
 let midiAccess = null;
 let toastTimer = null;
 
@@ -79,19 +83,44 @@ export function refresh() {
 
 export async function boot() {
   try {
-    const pyodide = await loadPyodide({ indexURL: PYODIDE_URL });
     const ext = globalThis.ES8_ENGINE || {};
-    const archive = await (await fetch(new URL(ext.zip || "es8core.zip", ext.zip ? location.href : import.meta.url))).arrayBuffer();
-    pyodide.unpackArchive(archive, "zip", { extractDir: LIB_DIR });
-    pyodide.runPython(`import sys; sys.path.insert(0, "${LIB_DIR}")`);
-    bridge = pyodide.pyimport(ext.module || "es8core.webapp");
+    const far = ext.bridge ? await ext.bridge() : null;
+    if (far) {
+      bridge = far;
+      remote = true;
+    } else {
+      const pyodide = await (await pyodideLoader())({ indexURL: PYODIDE_URL });
+      const archive = await (await fetch(new URL(ext.zip || "es8core.zip", ext.zip ? location.href : import.meta.url))).arrayBuffer();
+      pyodide.unpackArchive(archive, "zip", { extractDir: LIB_DIR });
+      pyodide.runPython(`import sys; sys.path.insert(0, "${LIB_DIR}")`);
+      bridge = pyodide.pyimport(ext.module || "es8core.webapp");
+    }
     store.set({ ready: true, names: call("names") });
-    restoreCache();
+    if (remote) {
+      if (bridge.synced()) store.set({ synced: true });
+      refresh();
+    } else {
+      restoreCache();
+    }
   } catch (err) {
     store.set({ bootError: String(err) });
     return;
   }
   await setupMidi();
+}
+
+/** `loadPyodide`, en chargeant son script s'il n'est pas déjà dans la page. */
+async function pyodideLoader() {
+  if (typeof loadPyodide === "undefined") {
+    await new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = `${PYODIDE_URL}pyodide.js`;
+      script.onload = resolve;
+      script.onerror = () => reject(new Error("Pyodide could not be downloaded (no internet access?)"));
+      document.head.append(script);
+    });
+  }
+  return loadPyodide;
 }
 
 async function setupMidi() {
@@ -110,7 +139,9 @@ async function setupMidi() {
   store.set({ midi: "ok" });
   listPorts();
   const prefs = loadPrefs();
-  if (prefs.syncedOut && prefs.syncedOut === portName(store.state.out)) {
+  if (store.state.synced) {
+    // pont distant déjà à jour : rien à relire
+  } else if (prefs.syncedOut && prefs.syncedOut === portName(store.state.out)) {
     sync(); // ports déjà utilisés avec succès : on se resynchronise tout seul (≈ 10 s)
   } else if (!prefs.out) {
     connect(); // première visite : on cherche l'ES-8 sur tous les ports, puis on se connecte
@@ -362,6 +393,7 @@ const fromBase64 = (text) => Uint8Array.from(atob(text), (c) => c.charCodeAt(0))
 // ---------------------------------------------------------------- stockage du navigateur
 
 function saveCache() {
+  if (remote) return; // l'état est gardé là où tourne le pont
   try {
     localStorage.setItem(CACHE_KEY, JSON.stringify({ date: new Date().toISOString(), data: toBase64(currentSyx()) }));
   } catch { /* stockage plein ou refusé : le cache est un confort */ }
